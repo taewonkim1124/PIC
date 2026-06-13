@@ -12,8 +12,7 @@ const memberProperties = {
 } as const;
 
 const challengeProperties = {
-  title: "\uC774\uB984",
-  challenge: "\uCC4C\uB9B0\uC9C0\uC774\uB984",
+  title: "\uCC4C\uB9B0\uC9C0\uC774\uB984",
   date: "\uB0A0\uC9DC",
   manager: "\uAD00\uB9AC\uC790",
   participants: "\uCC38\uC5EC\uBA85\uB2E8",
@@ -124,7 +123,7 @@ async function findChallengePage(challenge: string, date: string) {
     page_size: 1,
     filter: {
       and: [
-        { property: challengeProperties.challenge, select: { equals: challenge } },
+        { property: challengeProperties.title, title: { equals: challenge } },
         { property: challengeProperties.date, date: { equals: date } },
       ],
     },
@@ -157,10 +156,7 @@ export async function createCheckin(input: {
       parent: { data_source_id: challengesDataSourceId() },
       properties: {
         [challengeProperties.title]: {
-          title: [{ text: { content: `${input.challenge} - ${input.date}` } }],
-        },
-        [challengeProperties.challenge]: {
-          select: { name: input.challenge },
+          title: [{ text: { content: input.challenge } }],
         },
         [challengeProperties.date]: {
           date: { start: input.date },
