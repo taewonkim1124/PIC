@@ -1,0 +1,211 @@
+import "server-only";
+
+import { isFullPage } from "@notionhq/client";
+import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+
+import { notion } from "@/lib/notion";
+
+const memberProperties = {
+  title: "\uC774\uB984",
+  email: "\uC774\uBA54\uC77C",
+  uniqueCode: "\uACE0\uC720\uCF54\uB4DC",
+} as const;
+
+const challengeProperties = {
+  title: "\uC774\uB984",
+  challenge: "\uCC4C\uB9B0\uC9C0\uC774\uB984",
+  date: "\uB0A0\uC9DC",
+  manager: "\uAD00\uB9AC\uC790",
+  participants: "\uCC38\uC5EC\uBA85\uB2E8",
+} as const;
+
+function requiredEnv(name: string) {
+  const value = process.env[name];
+  if (!process.env.NOTION_TOKEN || !value) {
+    throw new Error(`${name} is not configured.`);
+  }
+  return value;
+}
+
+function membersDataSourceId() {
+  return requiredEnv("NOTION_MEMBERS_DATA_SOURCE_ID");
+}
+
+function challengesDataSourceId() {
+  return requiredEnv("NOTION_CHECKINS_DATA_SOURCE_ID");
+}
+
+function requireFullPage(result: unknown): PageObjectResponse {
+  if (!isFullPage(result as Parameters<typeof isFullPage>[0])) {
+    throw new Error("Notion returned an incomplete page.");
+  }
+  return result as PageObjectResponse;
+}
+
+function richText(page: PageObjectResponse, property: string) {
+  const value = page.properties[property];
+  return value?.type === "rich_text"
+    ? value.rich_text.map((item) => item.plain_text).join("")
+    : "";
+}
+
+function title(page: PageObjectResponse, property: string) {
+  const value = page.properties[property];
+  return value?.type === "title"
+    ? value.title.map((item) => item.plain_text).join("")
+    : "";
+}
+
+function email(page: PageObjectResponse, property: string) {
+  const value = page.properties[property];
+  return value?.type === "email" ? value.email : null;
+}
+
+function relationIds(page: PageObjectResponse, property: string) {
+  const value = page.properties[property];
+  return value?.type === "relation"
+    ? value.relation.map((item) => item.id)
+    : [];
+}
+
+export async function findParticipantByCode(uniqueCode: string) {
+  const response = await notion.dataSources.query({
+    data_source_id: membersDataSourceId(),
+    page_size: 1,
+    filter: {
+      property: memberProperties.uniqueCode,
+      rich_text: { equals: uniqueCode },
+    },
+  });
+
+  const result = response.results[0];
+  if (!result) return null;
+  const page = requireFullPage(result);
+
+  return {
+    id: page.id,
+    name: title(page, memberProperties.title),
+    email: email(page, memberProperties.email),
+    unique_code: richText(page, memberProperties.uniqueCode),
+  };
+}
+
+export async function createParticipant(input: {
+  name: string;
+  email: string | null;
+  uniqueCode: string;
+}) {
+  const page = await notion.pages.create({
+    parent: { data_source_id: membersDataSourceId() },
+    properties: {
+      [memberProperties.title]: {
+        title: [{ text: { content: input.name } }],
+      },
+      [memberProperties.email]: {
+        email: input.email,
+      },
+      [memberProperties.uniqueCode]: {
+        rich_text: [{ text: { content: input.uniqueCode } }],
+      },
+    },
+  });
+
+  return {
+    id: page.id,
+    name: input.name,
+    email: input.email,
+    unique_code: input.uniqueCode,
+  };
+}
+
+async function findChallengePage(challenge: string, date: string) {
+  const response = await notion.dataSources.query({
+    data_source_id: challengesDataSourceId(),
+    page_size: 1,
+    filter: {
+      and: [
+        { property: challengeProperties.challenge, select: { equals: challenge } },
+        { property: challengeProperties.date, date: { equals: date } },
+      ],
+    },
+  });
+
+  return response.results[0] ? requireFullPage(response.results[0]) : null;
+}
+
+export async function findCheckin(
+  participantId: string,
+  challenge: string,
+  date: string,
+) {
+  const page = await findChallengePage(challenge, date);
+  if (!page) return false;
+
+  return relationIds(page, challengeProperties.participants).includes(participantId);
+}
+
+export async function createCheckin(input: {
+  participantId: string;
+  challenge: string;
+  date: string;
+  manager: string;
+}) {
+  const page = await findChallengePage(input.challenge, input.date);
+
+  if (!page) {
+    return notion.pages.create({
+      parent: { data_source_id: challengesDataSourceId() },
+      properties: {
+        [challengeProperties.title]: {
+          title: [{ text: { content: `${input.challenge} - ${input.date}` } }],
+        },
+        [challengeProperties.challenge]: {
+          select: { name: input.challenge },
+        },
+        [challengeProperties.date]: {
+          date: { start: input.date },
+        },
+        [challengeProperties.manager]: {
+          rich_text: input.manager ? [{ text: { content: input.manager } }] : [],
+        },
+        [challengeProperties.participants]: {
+          relation: [{ id: input.participantId }],
+        },
+      },
+    });
+  }
+
+  const participantIds = relationIds(page, challengeProperties.participants);
+
+  return notion.pages.update({
+    page_id: page.id,
+    properties: {
+      [challengeProperties.manager]: {
+        rich_text: input.manager ? [{ text: { content: input.manager } }] : [],
+      },
+      [challengeProperties.participants]: {
+        relation: [...participantIds, input.participantId].map((id) => ({ id })),
+      },
+    },
+  });
+}
+
+export async function getCheckins(challenge: string, date: string) {
+  const page = await findChallengePage(challenge, date);
+  if (!page) return [];
+
+  const participantIds = relationIds(page, challengeProperties.participants);
+  const participants = await Promise.all(
+    participantIds.map(async (id) => requireFullPage(await notion.pages.retrieve({ page_id: id }))),
+  );
+
+  return participants.map((participant) => ({
+      id: participant.id,
+      checked_in_at: page.last_edited_time,
+      method: "qr",
+      participants: {
+        name: title(participant, memberProperties.title),
+        email: email(participant, memberProperties.email),
+      },
+    }));
+}
