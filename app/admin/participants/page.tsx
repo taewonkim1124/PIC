@@ -34,7 +34,7 @@ export default function ParticipantsAdminPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "Registration failed.");
+        throw new Error(result.error ?? "멤버 등록에 실패했습니다.");
       }
 
       const createdParticipant = result.participant as Participant;
@@ -43,7 +43,7 @@ export default function ParticipantsAdminPage() {
       setName("");
       setEmail("");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Registration failed.");
+      setMessage(error instanceof Error ? error.message : "멤버 등록에 실패했습니다.");
     } finally {
       setLoading(false);
     }
@@ -52,10 +52,10 @@ export default function ParticipantsAdminPage() {
   return (
     <main style={styles.main}>
       <section style={styles.card}>
-        <h1>Register participant</h1>
+        <h1>멤버 등록</h1>
         <form onSubmit={registerParticipant} style={styles.form}>
           <label>
-            Name
+            이름
             <input
               required
               value={name}
@@ -64,7 +64,7 @@ export default function ParticipantsAdminPage() {
             />
           </label>
           <label>
-            Email (optional)
+            이메일 (선택)
             <input
               type="email"
               value={email}
@@ -73,7 +73,7 @@ export default function ParticipantsAdminPage() {
             />
           </label>
           <button disabled={loading} style={styles.button}>
-            {loading ? "Registering..." : "Register participant"}
+            {loading ? "등록 중..." : "멤버 등록"}
           </button>
         </form>
         {message && <p style={styles.error}>{message}</p>}
@@ -85,7 +85,7 @@ export default function ParticipantsAdminPage() {
           <p style={styles.code}>{participant.unique_code}</p>
           {/* A generated data URL is the intended source for this QR image. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={qrImage} alt={`QR code for ${participant.name}`} width={320} />
+          <img src={qrImage} alt={`${participant.name}님의 QR 코드`} width={320} />
         </section>
       )}
     </main>

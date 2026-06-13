@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const DEFAULT_CHALLENGE_ID = "Default Challenge";
+const DEFAULT_CHALLENGE_ID = "기본 챌린지";
 
 type Checkin = {
   id: string;
@@ -30,13 +30,13 @@ export default function CheckinsPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "Could not load check-ins.");
+        throw new Error(result.error ?? "참여명단을 불러올 수 없습니다.");
       }
 
       setDate(result.date);
       setCheckins(result.checkins);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not load check-ins.");
+      setMessage(error instanceof Error ? error.message : "참여명단을 불러올 수 없습니다.");
     } finally {
       setLoading(false);
     }
@@ -44,30 +44,30 @@ export default function CheckinsPage() {
 
   return (
     <main style={styles.main}>
-      <h1>Today&apos;s check-ins</h1>
+      <h1>오늘의 참여명단</h1>
       <label>
-        Challenge name
+        챌린지 이름
         <input
           value={challengeId}
           onChange={(event) => setChallengeId(event.target.value)}
-          placeholder="Default Challenge"
+          placeholder="기본 챌린지"
           style={styles.input}
         />
       </label>
       <button disabled={loading || !challengeId.trim()} onClick={loadCheckins} style={styles.button}>
-        {loading ? "Refreshing..." : "Refresh"}
+        {loading ? "새로고침 중..." : "새로고침"}
       </button>
-      {date && <p>Date: {date}</p>}
+      {date && <p>날짜: {date}</p>}
       {message && <p style={{ color: "#b42318" }}>{message}</p>}
       <section style={styles.list}>
         {checkins.map((checkin) => (
           <article key={checkin.id} style={styles.item}>
-            <strong>{checkin.participants?.name ?? "Unknown participant"}</strong>
-            <span>{checkin.participants?.email ?? "No email"}</span>
+            <strong>{checkin.participants?.name ?? "알 수 없는 멤버"}</strong>
+            <span>{checkin.participants?.email ?? "이메일 없음"}</span>
             <span>{new Date(checkin.checked_in_at).toLocaleTimeString()}</span>
           </article>
         ))}
-        {!loading && date && checkins.length === 0 && <p>No check-ins yet.</p>}
+        {!loading && date && checkins.length === 0 && <p>아직 참여자가 없습니다.</p>}
       </section>
     </main>
   );

@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+    return Response.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
 
   const uniqueCode =
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
   if (!uniqueCode || !challengeId) {
     return Response.json(
-      { error: "uniqueCode and challengeId are required." },
+      { error: "고유 QR 코드와 챌린지 이름이 필요합니다." },
       { status: 400 },
     );
   }
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   try {
     const participant = await findParticipantByCode(uniqueCode);
     if (!participant) {
-      return Response.json({ error: "Participant not found." }, { status: 404 });
+      return Response.json({ error: "등록된 멤버를 찾을 수 없습니다." }, { status: 404 });
     }
 
     const checkinDate = serverDate();
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
         status: "already_checked_in",
         participantName: participant.name,
         date: checkinDate,
-        message: `${participant.name} is already checked in today.`,
+        message: `${participant.name}님은 오늘 이미 참여했습니다.`,
       });
     }
 
@@ -64,12 +64,12 @@ export async function POST(request: Request) {
         status: "checked_in",
         participantName: participant.name,
         date: checkinDate,
-        message: `${participant.name} checked in successfully.`,
+        message: `${participant.name}님 체크인이 완료되었습니다.`,
       },
       { status: 201 },
     );
   } catch (error) {
     console.error("Notion check-in failed:", error);
-    return Response.json({ error: "Could not save check-in." }, { status: 500 });
+    return Response.json({ error: "체크인을 저장할 수 없습니다." }, { status: 500 });
   }
 }

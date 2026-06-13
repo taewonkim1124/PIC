@@ -25,8 +25,8 @@ export default function Home() {
   return (
     <main style={styles.main}>
       <header>
-        <p style={styles.eyebrow}>PIC CLUB</p>
-        <h1 style={styles.heading}>QR Check-in</h1>
+        <p style={styles.eyebrow}>PIC 동아리</p>
+        <h1 style={styles.heading}>QR 체크인</h1>
         <p style={styles.subtitle}>멤버 등록부터 챌린지 참여 확인까지</p>
       </header>
 

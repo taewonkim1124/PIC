@@ -9,7 +9,7 @@ export async function GET(request: Request) {
 
   if (!challengeId.trim()) {
     return Response.json(
-      { error: "challengeId is required." },
+      { error: "챌린지 이름을 입력해주세요." },
       { status: 400 },
     );
   }
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Today's Notion check-in lookup failed:", error);
     return Response.json(
-      { error: "Could not load today's check-ins." },
+      { error: "오늘의 참여명단을 불러올 수 없습니다." },
       { status: 500 },
     );
   }

@@ -13,12 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PIC QR Check-in",
-  description: "PIC member QR check-in app",
+  title: "PIC QR 체크인",
+  description: "PIC 멤버 QR 체크인 앱",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "PIC Check-in",
+    title: "PIC 체크인",
   },
 };
 

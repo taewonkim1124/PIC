@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Html5QrcodeScanner } from "html5-qrcode";
 
-const DEFAULT_CHALLENGE_ID = "Default Challenge";
+const DEFAULT_CHALLENGE_ID = "기본 챌린지";
 const DEFAULT_MANAGER = "";
 
 type CheckinResult = {
@@ -53,7 +53,7 @@ export default function ScanPage() {
           const data = (await response.json()) as CheckinResult;
           setResult(data);
         } catch {
-          setResult({ error: "Could not contact the check-in server." });
+          setResult({ error: "체크인 서버에 연결할 수 없습니다." });
         }
       }, undefined);
     }
@@ -76,31 +76,31 @@ export default function ScanPage() {
 
   return (
     <main style={styles.main}>
-      <h1>Scan QR check-in</h1>
+      <h1>QR 체크인</h1>
       <label>
-        Challenge name
+        챌린지 이름
         <input
           value={challengeId}
           onChange={(event) => setChallengeId(event.target.value)}
           disabled={scanning}
-          placeholder="Default Challenge"
+          placeholder="기본 챌린지"
           style={styles.input}
         />
       </label>
       <label>
-        Manager
+        관리자
         <input
           value={manager}
           onChange={(event) => setManager(event.target.value)}
           disabled={scanning}
-          placeholder="Manager name"
+          placeholder="관리자 이름"
           style={styles.input}
         />
       </label>
 
       {!scanning && !result && (
         <button disabled={!challengeId.trim()} onClick={scanAgain} style={styles.button}>
-          Start camera
+          카메라 시작
         </button>
       )}
 
@@ -108,10 +108,10 @@ export default function ScanPage() {
 
       {result && (
         <section style={styles.result}>
-          <h2>{result.participantName ?? "Check-in failed"}</h2>
+          <h2>{result.participantName ?? "체크인 실패"}</h2>
           {result.date && <p>{result.date}</p>}
           <p>{result.message ?? result.error}</p>
-          <button onClick={scanAgain} style={styles.button}>Scan again</button>
+          <button onClick={scanAgain} style={styles.button}>다시 스캔</button>
         </section>
       )}
     </main>
