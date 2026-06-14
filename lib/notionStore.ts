@@ -14,7 +14,6 @@ const memberProperties = {
 const challengeProperties = {
   title: "\uCC4C\uB9B0\uC9C0\uC774\uB984",
   date: "\uB0A0\uC9DC",
-  manager: "\uAD00\uB9AC\uC790",
   participants: "\uCC38\uC5EC\uBA85\uB2E8",
 } as const;
 
@@ -147,7 +146,6 @@ export async function createCheckin(input: {
   participantId: string;
   challenge: string;
   date: string;
-  manager: string;
 }) {
   const page = await findChallengePage(input.challenge, input.date);
 
@@ -161,9 +159,6 @@ export async function createCheckin(input: {
         [challengeProperties.date]: {
           date: { start: input.date },
         },
-        [challengeProperties.manager]: {
-          rich_text: input.manager ? [{ text: { content: input.manager } }] : [],
-        },
         [challengeProperties.participants]: {
           relation: [{ id: input.participantId }],
         },
@@ -176,14 +171,36 @@ export async function createCheckin(input: {
   return notion.pages.update({
     page_id: page.id,
     properties: {
-      [challengeProperties.manager]: {
-        rich_text: input.manager ? [{ text: { content: input.manager } }] : [],
-      },
       [challengeProperties.participants]: {
         relation: [...participantIds, input.participantId].map((id) => ({ id })),
       },
     },
   });
+}
+
+export async function getChallengeNames() {
+  const names = new Set<string>();
+  let cursor: string | undefined;
+
+  do {
+    const response = await notion.dataSources.query({
+      data_source_id: challengesDataSourceId(),
+      page_size: 100,
+      start_cursor: cursor,
+      sorts: [{ timestamp: "created_time", direction: "descending" }],
+    });
+
+    response.results
+      .filter(isFullPage)
+      .forEach((page) => {
+        const name = title(page, challengeProperties.title).trim();
+        if (name) names.add(name);
+      });
+
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+
+  return [...names];
 }
 
 export async function getCheckins(challenge: string, date: string) {

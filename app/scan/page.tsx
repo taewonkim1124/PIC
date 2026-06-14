@@ -3,9 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Html5QrcodeScanner } from "html5-qrcode";
 
-const DEFAULT_CHALLENGE_ID = "기본 챌린지";
-const DEFAULT_MANAGER = "";
-
 type CheckinResult = {
   status?: "checked_in" | "already_checked_in";
   participantName?: string;
@@ -15,12 +12,38 @@ type CheckinResult = {
 };
 
 export default function ScanPage() {
-  const [challengeId, setChallengeId] = useState(DEFAULT_CHALLENGE_ID);
-  const [manager, setManager] = useState(DEFAULT_MANAGER);
+  const [challenges, setChallenges] = useState<string[]>([]);
+  const [challengeId, setChallengeId] = useState("");
+  const [loadingChallenges, setLoadingChallenges] = useState(true);
+  const [challengeError, setChallengeError] = useState("");
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<CheckinResult | null>(null);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const handlingScan = useRef(false);
+
+  useEffect(() => {
+    async function loadChallenges() {
+      try {
+        const response = await fetch("/api/challenges", { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+
+        const names = data.challenges as string[];
+        setChallenges(names);
+        setChallengeId(names[0] ?? "");
+      } catch (error) {
+        setChallengeError(
+          error instanceof Error
+            ? error.message
+            : "챌린지 목록을 불러올 수 없습니다.",
+        );
+      } finally {
+        setLoadingChallenges(false);
+      }
+    }
+
+    void loadChallenges();
+  }, []);
 
   useEffect(() => {
     if (!scanning) return;
@@ -48,7 +71,7 @@ export default function ScanPage() {
           const response = await fetch("/api/checkin", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ uniqueCode: decodedText, challengeId, manager }),
+            body: JSON.stringify({ uniqueCode: decodedText, challengeId }),
           });
           const data = (await response.json()) as CheckinResult;
           setResult(data);
@@ -66,7 +89,7 @@ export default function ScanPage() {
       scannerRef.current = null;
       if (scanner) void scanner.clear().catch(() => undefined);
     };
-  }, [challengeId, manager, scanning]);
+  }, [challengeId, scanning]);
 
   function scanAgain() {
     handlingScan.current = false;
@@ -79,27 +102,28 @@ export default function ScanPage() {
       <h1>QR 체크인</h1>
       <label>
         챌린지 이름
-        <input
+        <select
           value={challengeId}
           onChange={(event) => setChallengeId(event.target.value)}
-          disabled={scanning}
-          placeholder="기본 챌린지"
+          disabled={scanning || loadingChallenges}
           style={styles.input}
-        />
-      </label>
-      <label>
-        관리자
-        <input
-          value={manager}
-          onChange={(event) => setManager(event.target.value)}
-          disabled={scanning}
-          placeholder="관리자 이름"
-          style={styles.input}
-        />
+        >
+          {loadingChallenges && <option>챌린지 목록 불러오는 중...</option>}
+          {!loadingChallenges && challenges.length === 0 && (
+            <option value="">등록된 챌린지가 없습니다</option>
+          )}
+          {challenges.map((challenge) => (
+            <option key={challenge} value={challenge}>
+              {challenge}
+            </option>
+          ))}
+        </select>
       </label>
 
+      {challengeError && <p style={styles.error}>{challengeError}</p>}
+
       {!scanning && !result && (
-        <button disabled={!challengeId.trim()} onClick={scanAgain} style={styles.button}>
+        <button disabled={!challengeId} onClick={scanAgain} style={styles.button}>
           카메라 시작
         </button>
       )}
@@ -111,7 +135,9 @@ export default function ScanPage() {
           <h2>{result.participantName ?? "체크인 실패"}</h2>
           {result.date && <p>{result.date}</p>}
           <p>{result.message ?? result.error}</p>
-          <button onClick={scanAgain} style={styles.button}>다시 스캔</button>
+          <button onClick={scanAgain} style={styles.button}>
+            다시 스캔
+          </button>
         </section>
       )}
     </main>
@@ -120,8 +146,9 @@ export default function ScanPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   main: { maxWidth: 680, margin: "40px auto", padding: 20, display: "grid", gap: 20 },
-  input: { display: "block", width: "100%", marginTop: 6, padding: 10, border: "1px solid #bbb", borderRadius: 6 },
+  input: { display: "block", width: "100%", marginTop: 6, padding: 10, border: "1px solid #bbb", borderRadius: 6, background: "#fff" },
   button: { padding: 12, border: 0, borderRadius: 6, background: "#111", color: "#fff", cursor: "pointer" },
   reader: { width: "100%", background: "#fff" },
   result: { border: "1px solid #ddd", borderRadius: 12, padding: 24, background: "#fff", color: "#111" },
+  error: { color: "#b42318", margin: 0 },
 };

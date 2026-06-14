@@ -7,7 +7,6 @@ import {
 type CheckinBody = {
   uniqueCode?: unknown;
   challengeId?: unknown;
-  manager?: unknown;
 };
 
 function serverDate() {
@@ -27,8 +26,6 @@ export async function POST(request: Request) {
     typeof body.uniqueCode === "string" ? body.uniqueCode.trim() : "";
   const challengeId =
     typeof body.challengeId === "string" ? body.challengeId.trim() : "";
-  const manager = typeof body.manager === "string" ? body.manager.trim() : "";
-
   if (!uniqueCode || !challengeId) {
     return Response.json(
       { error: "고유 QR 코드와 챌린지 이름이 필요합니다." },
@@ -56,7 +53,6 @@ export async function POST(request: Request) {
       participantId: participant.id,
       challenge: challengeId,
       date: checkinDate,
-      manager,
     });
 
     return Response.json(
