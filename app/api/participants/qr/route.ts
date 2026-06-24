@@ -32,19 +32,23 @@ export async function POST(request: Request) {
 
   try {
     const current = await getParticipantById(participantId);
-    const participant =
-      current.unique_code && !shouldReissue
-        ? current
-        : await updateParticipantCode(
-            participantId,
-            await createUniqueParticipantCode(),
-          );
+    const needsNewCode = !current.unique_code || shouldReissue;
+    const participant = needsNewCode
+      ? await updateParticipantCode(
+          participantId,
+          await createUniqueParticipantCode(),
+        )
+      : current;
 
     if (shouldSendEmail) {
       await sendQrEmail(participant);
     }
 
-    return Response.json({ participant, emailSent: shouldSendEmail });
+    return Response.json({
+      participant,
+      emailSent: shouldSendEmail,
+      reissued: Boolean(current.unique_code && shouldReissue),
+    });
   } catch (error) {
     console.error("QR issuing failed:", error);
     return Response.json(

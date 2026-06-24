@@ -70,9 +70,7 @@ export default function ParticipantsAdminPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        if (result.participant) {
-          await showQr(result.participant);
-        }
+        if (result.participant) await showQr(result.participant);
         throw new Error(result.error ?? "멤버 등록에 실패했습니다.");
       }
 
@@ -82,7 +80,11 @@ export default function ParticipantsAdminPage() {
       setEmail("");
       setSendOnRegister(false);
       await loadParticipants();
-      setMessage(result.emailSent ? "멤버 등록 및 QR 이메일 발송이 완료되었습니다." : "멤버 등록이 완료되었습니다.");
+      setMessage(
+        result.emailSent
+          ? "멤버 등록과 QR 이메일 발송이 완료되었습니다."
+          : "멤버 등록이 완료되었습니다.",
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "멤버 등록에 실패했습니다.");
     } finally {
@@ -90,7 +92,16 @@ export default function ParticipantsAdminPage() {
     }
   }
 
-  async function issueQr(participant: Participant, options?: { reissue?: boolean; sendEmail?: boolean }) {
+  async function issueQr(
+    participant: Participant,
+    options?: { reissue?: boolean; sendEmail?: boolean },
+  ) {
+    const isReissue = options?.reissue === true;
+
+    if (isReissue && !window.confirm(`${participant.name}님의 기존 QR 코드를 새 QR 코드로 재발급할까요? 기존 QR은 더 이상 사용할 수 없습니다.`)) {
+      return;
+    }
+
     setLoading(true);
     setMessage("");
 
@@ -100,7 +111,7 @@ export default function ParticipantsAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           participantId: participant.id,
-          reissue: options?.reissue ?? false,
+          reissue: isReissue,
           sendEmail: options?.sendEmail ?? false,
         }),
       });
@@ -113,7 +124,13 @@ export default function ParticipantsAdminPage() {
       const updatedParticipant = result.participant as Participant;
       await showQr(updatedParticipant);
       await loadParticipants();
-      setMessage(result.emailSent ? "QR 코드 발급 및 이메일 발송이 완료되었습니다." : "QR 코드 발급이 완료되었습니다.");
+      setMessage(
+        result.emailSent
+          ? "QR 코드 발급과 이메일 발송이 완료되었습니다."
+          : isReissue
+            ? "기존 QR 코드를 새 QR 코드로 재발급했습니다."
+            : "QR 코드 발급이 완료되었습니다.",
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "QR 코드를 발급할 수 없습니다.");
     } finally {
@@ -138,7 +155,7 @@ export default function ParticipantsAdminPage() {
       }
 
       await loadParticipants();
-      setMessage(`${result.count}명의 기존 멤버에게 QR 코드를 발급했습니다.`);
+      setMessage(`${result.count}명의 기존 멤버에게 QR 코드를 새로 발급했습니다.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "미발급 멤버 QR 코드를 발급할 수 없습니다.");
     } finally {
@@ -179,28 +196,14 @@ export default function ParticipantsAdminPage() {
         <form onSubmit={registerParticipant} style={styles.form}>
           <label>
             이름
-            <input
-              required
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              style={styles.input}
-            />
+            <input required value={name} onChange={(event) => setName(event.target.value)} style={styles.input} />
           </label>
           <label>
             이메일
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              style={styles.input}
-            />
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} style={styles.input} />
           </label>
           <label style={styles.checkboxLabel}>
-            <input
-              type="checkbox"
-              checked={sendOnRegister}
-              onChange={(event) => setSendOnRegister(event.target.checked)}
-            />
+            <input type="checkbox" checked={sendOnRegister} onChange={(event) => setSendOnRegister(event.target.checked)} />
             등록 후 QR 이메일 보내기
           </label>
           <button disabled={loading} style={styles.button}>
@@ -212,6 +215,9 @@ export default function ParticipantsAdminPage() {
 
       <section style={styles.card}>
         <h2>기존 멤버 QR 관리</h2>
+        <p style={styles.muted}>
+          QR이 없는 기존 멤버에게는 새 QR을 발급하고, 이미 QR이 있는 멤버는 재발급으로 기존 코드를 새 코드로 교체합니다.
+        </p>
         <div style={styles.actions}>
           <button disabled={loading || missingQrCount === 0} onClick={() => issueMissingQr(false)} style={styles.button}>
             미발급 멤버 전체 발급 ({missingQrCount})
@@ -239,12 +245,16 @@ export default function ParticipantsAdminPage() {
                   <button disabled={loading || !participant.unique_code} onClick={() => showQr(participant)} style={styles.smallButton}>
                     QR 보기
                   </button>
-                  <button disabled={loading} onClick={() => issueQr(participant)} style={styles.smallButton}>
-                    {participant.unique_code ? "발급 유지" : "QR 발급"}
-                  </button>
-                  <button disabled={loading} onClick={() => issueQr(participant, { reissue: true })} style={styles.smallDangerButton}>
-                    재발급
-                  </button>
+                  {!participant.unique_code && (
+                    <button disabled={loading} onClick={() => issueQr(participant)} style={styles.smallButton}>
+                      QR 발급
+                    </button>
+                  )}
+                  {participant.unique_code && (
+                    <button disabled={loading} onClick={() => issueQr(participant, { reissue: true })} style={styles.smallDangerButton}>
+                      재발급
+                    </button>
+                  )}
                   <button disabled={loading || !participant.email || !participant.unique_code} onClick={() => emailQr(participant)} style={styles.smallButton}>
                     이메일 발송
                   </button>
