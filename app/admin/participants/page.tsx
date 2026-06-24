@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 
 type Participant = {
@@ -15,6 +15,7 @@ export default function ParticipantsAdminPage() {
   const [email, setEmail] = useState("");
   const [sendOnRegister, setSendOnRegister] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [search, setSearch] = useState("");
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [qrImage, setQrImage] = useState("");
   const [message, setMessage] = useState("");
@@ -24,6 +25,23 @@ export default function ParticipantsAdminPage() {
   useEffect(() => {
     void loadParticipants();
   }, []);
+
+  const filteredParticipants = useMemo(() => {
+    const keyword = search.trim().toLocaleLowerCase();
+    if (!keyword) return participants;
+
+    return participants.filter((participant) => {
+      const fields = [
+        participant.name,
+        participant.email ?? "",
+        participant.unique_code,
+      ];
+
+      return fields.some((field) =>
+        field.toLocaleLowerCase().includes(keyword),
+      );
+    });
+  }, [participants, search]);
 
   async function showQr(participant: Participant) {
     setSelectedParticipant(participant);
@@ -98,7 +116,12 @@ export default function ParticipantsAdminPage() {
   ) {
     const isReissue = options?.reissue === true;
 
-    if (isReissue && !window.confirm(`${participant.name}님의 기존 QR 코드를 새 QR 코드로 재발급할까요? 기존 QR은 더 이상 사용할 수 없습니다.`)) {
+    if (
+      isReissue &&
+      !window.confirm(
+        `${participant.name}님의 기존 QR 코드를 새 QR 코드로 재발급할까요? 기존 QR은 더 이상 사용할 수 없습니다.`,
+      )
+    ) {
       return;
     }
 
@@ -216,6 +239,15 @@ export default function ParticipantsAdminPage() {
       <section style={styles.card}>
         <h2>기존 멤버 QR 관리</h2>
         <p style={styles.muted}>
+          이름, 이메일, 고유코드로 멤버를 검색할 수 있습니다.
+        </p>
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="멤버 이름 검색"
+          style={styles.searchInput}
+        />
+        <p style={styles.muted}>
           QR이 없는 기존 멤버에게는 새 QR을 발급하고, 이미 QR이 있는 멤버는 재발급으로 기존 코드를 새 코드로 교체합니다.
         </p>
         <div style={styles.actions}>
@@ -234,7 +266,7 @@ export default function ParticipantsAdminPage() {
           <p>멤버 목록을 불러오는 중...</p>
         ) : (
           <div style={styles.table}>
-            {participants.map((participant) => (
+            {filteredParticipants.map((participant) => (
               <article key={participant.id} style={styles.memberRow}>
                 <div>
                   <strong>{participant.name || "이름 없음"}</strong>
@@ -261,6 +293,7 @@ export default function ParticipantsAdminPage() {
                 </div>
               </article>
             ))}
+            {filteredParticipants.length === 0 && <p>검색 결과가 없습니다.</p>}
           </div>
         )}
       </section>
@@ -286,6 +319,7 @@ const styles: Record<string, React.CSSProperties> = {
   card: { border: "1px solid #ddd", borderRadius: 12, padding: 24, background: "#fff", color: "#111" },
   form: { display: "grid", gap: 16 },
   input: { display: "block", width: "100%", marginTop: 6, padding: 10, border: "1px solid #bbb", borderRadius: 6 },
+  searchInput: { display: "block", width: "100%", margin: "12px 0", padding: 12, border: "1px solid #999", borderRadius: 8 },
   checkboxLabel: { display: "flex", alignItems: "center", gap: 8 },
   button: { padding: 12, border: 0, borderRadius: 6, background: "#111", color: "#fff", cursor: "pointer" },
   secondaryButton: { padding: 12, border: "1px solid #bbb", borderRadius: 6, background: "#fff", color: "#111", cursor: "pointer" },
