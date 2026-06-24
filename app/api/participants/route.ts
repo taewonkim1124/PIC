@@ -1,11 +1,29 @@
-import { randomUUID } from "node:crypto";
-
-import { createParticipant, findParticipantByCode } from "@/lib/notionStore";
+import {
+  createParticipant,
+  findParticipantDuplicate,
+  getParticipants,
+} from "@/lib/notionStore";
+import { createUniqueParticipantCode } from "@/lib/participantCodes";
+import { sendQrEmail } from "@/lib/qrEmail";
 
 type ParticipantBody = {
   name?: unknown;
   email?: unknown;
+  sendEmail?: unknown;
 };
+
+export async function GET() {
+  try {
+    const participants = await getParticipants();
+    return Response.json({ participants });
+  } catch (error) {
+    console.error("Participant lookup failed:", error);
+    return Response.json(
+      { error: "멤버 목록을 불러올 수 없습니다." },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(request: Request) {
   let body: ParticipantBody;
@@ -21,25 +39,42 @@ export async function POST(request: Request) {
     typeof body.email === "string" && body.email.trim()
       ? body.email.trim()
       : null;
+  const shouldSendEmail = body.sendEmail === true;
 
   if (!name) {
     return Response.json({ error: "이름을 입력해주세요." }, { status: 400 });
   }
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const uniqueCode = `USER-${randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase()}`;
-    try {
-      if (await findParticipantByCode(uniqueCode)) continue;
-      const participant = await createParticipant({ name, email, uniqueCode });
-      return Response.json({ participant }, { status: 201 });
-    } catch (error) {
-      console.error("Participant creation failed:", error);
-      return Response.json({ error: "멤버를 등록할 수 없습니다." }, { status: 500 });
+  try {
+    const duplicate = await findParticipantDuplicate({ name, email });
+    if (duplicate) {
+      return Response.json(
+        {
+          error: "이미 등록된 멤버입니다.",
+          participant: duplicate,
+        },
+        { status: 409 },
+      );
     }
-  }
 
-  return Response.json(
-    { error: "고유 QR 코드를 생성할 수 없습니다." },
-    { status: 500 },
-  );
+    const uniqueCode = await createUniqueParticipantCode();
+    const participant = await createParticipant({ name, email, uniqueCode });
+
+    if (shouldSendEmail) {
+      await sendQrEmail(participant);
+    }
+
+    return Response.json({ participant, emailSent: shouldSendEmail }, { status: 201 });
+  } catch (error) {
+    console.error("Participant creation failed:", error);
+    return Response.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "멤버를 등록할 수 없습니다.",
+      },
+      { status: 500 },
+    );
+  }
 }

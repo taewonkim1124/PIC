@@ -88,6 +88,77 @@ export async function findParticipantByCode(uniqueCode: string) {
   };
 }
 
+function participantFromPage(page: PageObjectResponse) {
+  return {
+    id: page.id,
+    name: title(page, memberProperties.title),
+    email: email(page, memberProperties.email),
+    unique_code: richText(page, memberProperties.uniqueCode),
+  };
+}
+
+export async function getParticipants() {
+  const participants = [];
+  let cursor: string | undefined;
+
+  do {
+    const response = await notion.dataSources.query({
+      data_source_id: membersDataSourceId(),
+      page_size: 100,
+      start_cursor: cursor,
+      sorts: [{ property: memberProperties.title, direction: "ascending" }],
+    });
+
+    participants.push(
+      ...response.results.filter(isFullPage).map((page) => participantFromPage(page)),
+    );
+
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+
+  return participants;
+}
+
+export async function findParticipantDuplicate(input: {
+  name: string;
+  email: string | null;
+}) {
+  const participants = await getParticipants();
+  const normalizedName = input.name.trim().toLocaleLowerCase();
+  const normalizedEmail = input.email?.trim().toLocaleLowerCase();
+
+  return participants.find((participant) => {
+    if (normalizedEmail && participant.email?.toLocaleLowerCase() === normalizedEmail) {
+      return true;
+    }
+
+    return participant.name.trim().toLocaleLowerCase() === normalizedName;
+  }) ?? null;
+}
+
+export async function updateParticipantCode(
+  participantId: string,
+  uniqueCode: string,
+) {
+  const page = requireFullPage(
+    await notion.pages.update({
+      page_id: participantId,
+      properties: {
+        [memberProperties.uniqueCode]: {
+          rich_text: [{ text: { content: uniqueCode } }],
+        },
+      },
+    }),
+  );
+
+  return participantFromPage(page);
+}
+
+export async function getParticipantById(participantId: string) {
+  const page = requireFullPage(await notion.pages.retrieve({ page_id: participantId }));
+  return participantFromPage(page);
+}
+
 export async function createParticipant(input: {
   name: string;
   email: string | null;
