@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     typeof body.uniqueCode === "string" ? body.uniqueCode.trim() : "";
   const challengeId =
     typeof body.challengeId === "string" ? body.challengeId.trim() : "";
+
   if (!uniqueCode || !challengeId) {
     return Response.json(
       { error: "고유 QR 코드와 챌린지 이름이 필요합니다." },

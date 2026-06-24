@@ -36,12 +36,12 @@ export async function sendQrEmail(participant: Participant) {
   const { error } = await resend.emails.send({
     from,
     to: [participant.email],
-    subject: "[PIC] 멤버 QR 코드",
+    subject: "[PIC] Member QR Code",
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-        <h1>PIC 멤버 QR 코드</h1>
-        <p>${participant.name}님, 아래 첨부파일의 QR 코드를 체크인할 때 사용해주세요.</p>
-        <p><strong>고유코드:</strong> ${participant.unique_code}</p>
+        <h1>PIC Member QR Code</h1>
+        <p>Hello ${participant.name}, please use the attached QR code when checking in.</p>
+        <p><strong>Unique Code:</strong> ${participant.unique_code}</p>
       </div>
     `,
     attachments: [

@@ -6,15 +6,15 @@ import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoint
 import { notion } from "@/lib/notion";
 
 const memberProperties = {
-  title: "\uC774\uB984",
-  email: "\uC774\uBA54\uC77C",
-  uniqueCode: "\uACE0\uC720\uCF54\uB4DC",
+  title: "Name",
+  email: "Email",
+  uniqueCode: "Unique Code",
 } as const;
 
 const challengeProperties = {
-  title: "\uCC4C\uB9B0\uC9C0\uC774\uB984",
-  date: "\uB0A0\uC9DC",
-  participants: "\uCC38\uC5EC\uBA85\uB2E8",
+  title: "Challenge Name",
+  date: "Date",
+  participants: "Participants",
 } as const;
 
 function requiredEnv(name: string) {
