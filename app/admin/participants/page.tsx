@@ -230,41 +230,39 @@ export default function ParticipantsAdminPage() {
 
               return (
                 <article key={participant.id} style={styles.memberRow}>
-                  <div style={styles.memberSummary}>
-                    <div>
-                      <strong>{participant.name || "이름 없음"}</strong>
-                      <p style={styles.muted}>{participant.email ?? "이메일 없음"}</p>
-                      <p style={styles.code}>{participant.unique_code || "QR 미발급"}</p>
-                    </div>
-                    <div style={styles.rowActions}>
-                      <button disabled={loading || !participant.unique_code} onClick={() => showQr(participant)} style={styles.smallButton}>
-                        QR 보기
-                      </button>
-                      {!participant.unique_code && (
-                        <button disabled={loading} onClick={() => issueQr(participant)} style={styles.smallButton}>
-                          QR 발급
-                        </button>
-                      )}
-                      {participant.unique_code && (
-                        <button disabled={loading} onClick={() => issueQr(participant, true)} style={styles.smallDangerButton}>
-                          재발급
-                        </button>
-                      )}
-                    </div>
+                  <div style={styles.memberInfo}>
+                    <strong>{participant.name || "이름 없음"}</strong>
+                    <p style={styles.muted}>{participant.email ?? "이메일 없음"}</p>
+                    <p style={styles.code}>{participant.unique_code || "QR 미발급"}</p>
+
+                    {isSelected && (
+                      <div style={styles.inlineQr}>
+                        <h3 style={styles.inlineQrTitle}>{participant.name} QR 코드</h3>
+                        {qrImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={qrImage} alt={`${participant.name}님의 QR 코드`} width={260} />
+                        ) : (
+                          <p>아직 QR 코드가 발급되지 않았습니다.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  {isSelected && (
-                    <div style={styles.inlineQr}>
-                      <h3 style={styles.inlineQrTitle}>{participant.name} QR 코드</h3>
-                      <p style={styles.code}>{participant.unique_code || "QR 미발급"}</p>
-                      {qrImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={qrImage} alt={`${participant.name}님의 QR 코드`} width={260} />
-                      ) : (
-                        <p>아직 QR 코드가 발급되지 않았습니다.</p>
-                      )}
-                    </div>
-                  )}
+                  <div style={styles.rowActions}>
+                    <button disabled={loading || !participant.unique_code} onClick={() => showQr(participant)} style={styles.smallButton}>
+                      QR 보기
+                    </button>
+                    {!participant.unique_code && (
+                      <button disabled={loading} onClick={() => issueQr(participant)} style={styles.smallButton}>
+                        QR 발급
+                      </button>
+                    )}
+                    {participant.unique_code && (
+                      <button disabled={loading} onClick={() => issueQr(participant, true)} style={styles.smallDangerButton}>
+                        재발급
+                      </button>
+                    )}
+                  </div>
                 </article>
               );
             })}
@@ -289,11 +287,11 @@ const styles: Record<string, React.CSSProperties> = {
   code: { fontFamily: "monospace", fontSize: 14, margin: "4px 0" },
   actions: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 },
   table: { display: "grid", gap: 10 },
-  memberRow: { display: "grid", gap: 14, border: "1px solid #eee", borderRadius: 10, padding: 14 },
-  memberSummary: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 14, alignItems: "center" },
+  memberRow: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 14, alignItems: "start", border: "1px solid #eee", borderRadius: 10, padding: 14 },
+  memberInfo: { display: "grid", gap: 4 },
   rowActions: { display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" },
   smallButton: { padding: "8px 10px", border: "1px solid #bbb", borderRadius: 6, background: "#fff", color: "#111", cursor: "pointer" },
   smallDangerButton: { padding: "8px 10px", border: "1px solid #fca5a5", borderRadius: 6, background: "#fff1f2", color: "#9f1239", cursor: "pointer" },
-  inlineQr: { borderTop: "1px solid #eee", paddingTop: 14, textAlign: "center", background: "#fafafa", borderRadius: 8 },
+  inlineQr: { marginTop: 12, padding: 12, width: "fit-content", border: "1px solid #eee", borderRadius: 8, textAlign: "center", background: "#fafafa" },
   inlineQrTitle: { margin: "0 0 8px" },
 };
