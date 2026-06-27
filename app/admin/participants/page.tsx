@@ -13,10 +13,9 @@ type Participant = {
 export default function ParticipantsAdminPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [sendOnRegister, setSendOnRegister] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [search, setSearch] = useState("");
-  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+  const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [qrImage, setQrImage] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -44,12 +43,17 @@ export default function ParticipantsAdminPage() {
   }, [participants, search]);
 
   async function showQr(participant: Participant) {
-    setSelectedParticipant(participant);
+    setSelectedParticipantId(participant.id);
     setQrImage(
       participant.unique_code
         ? await QRCode.toDataURL(participant.unique_code, { width: 320 })
         : "",
     );
+  }
+
+  function hideQr() {
+    setSelectedParticipantId("");
+    setQrImage("");
   }
 
   async function loadParticipants() {
@@ -76,14 +80,13 @@ export default function ParticipantsAdminPage() {
     event.preventDefault();
     setLoading(true);
     setMessage("");
-    setSelectedParticipant(null);
-    setQrImage("");
+    hideQr();
 
     try {
       const response = await fetch("/api/participants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, sendEmail: sendOnRegister }),
+        body: JSON.stringify({ name, email }),
       });
       const result = await response.json();
 
@@ -93,16 +96,11 @@ export default function ParticipantsAdminPage() {
       }
 
       const createdParticipant = result.participant as Participant;
-      await showQr(createdParticipant);
       setName("");
       setEmail("");
-      setSendOnRegister(false);
       await loadParticipants();
-      setMessage(
-        result.emailSent
-          ? "멤버 등록과 QR 이메일 발송이 완료되었습니다."
-          : "멤버 등록이 완료되었습니다.",
-      );
+      await showQr(createdParticipant);
+      setMessage("멤버 등록이 완료되었습니다.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "멤버 등록에 실패했습니다.");
     } finally {
@@ -110,14 +108,9 @@ export default function ParticipantsAdminPage() {
     }
   }
 
-  async function issueQr(
-    participant: Participant,
-    options?: { reissue?: boolean; sendEmail?: boolean },
-  ) {
-    const isReissue = options?.reissue === true;
-
+  async function issueQr(participant: Participant, reissue = false) {
     if (
-      isReissue &&
+      reissue &&
       !window.confirm(
         `${participant.name}님의 기존 QR 코드를 새 QR 코드로 재발급할까요? 기존 QR은 더 이상 사용할 수 없습니다.`,
       )
@@ -134,8 +127,7 @@ export default function ParticipantsAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           participantId: participant.id,
-          reissue: isReissue,
-          sendEmail: options?.sendEmail ?? false,
+          reissue,
         }),
       });
       const result = await response.json();
@@ -145,14 +137,12 @@ export default function ParticipantsAdminPage() {
       }
 
       const updatedParticipant = result.participant as Participant;
-      await showQr(updatedParticipant);
       await loadParticipants();
+      await showQr(updatedParticipant);
       setMessage(
-        result.emailSent
-          ? "QR 코드 발급과 이메일 발송이 완료되었습니다."
-          : isReissue
-            ? "기존 QR 코드를 새 QR 코드로 재발급했습니다."
-            : "QR 코드 발급이 완료되었습니다.",
+        reissue
+          ? "기존 QR 코드를 새 QR 코드로 재발급했습니다."
+          : "QR 코드 발급이 완료되었습니다.",
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "QR 코드를 발급할 수 없습니다.");
@@ -161,7 +151,7 @@ export default function ParticipantsAdminPage() {
     }
   }
 
-  async function issueMissingQr(sendEmail: boolean) {
+  async function issueMissingQr() {
     setLoading(true);
     setMessage("");
 
@@ -169,7 +159,7 @@ export default function ParticipantsAdminPage() {
       const response = await fetch("/api/participants/qr", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sendEmail }),
+        body: JSON.stringify({ sendEmail: false }),
       });
       const result = await response.json();
 
@@ -181,30 +171,6 @@ export default function ParticipantsAdminPage() {
       setMessage(`${result.count}명의 기존 멤버에게 QR 코드를 새로 발급했습니다.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "미발급 멤버 QR 코드를 발급할 수 없습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function emailQr(participant: Participant) {
-    setLoading(true);
-    setMessage("");
-
-    try {
-      const response = await fetch("/api/participants/email-qr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ participantId: participant.id }),
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error ?? "QR 이메일을 보낼 수 없습니다.");
-      }
-
-      setMessage(`${participant.name}님에게 QR 이메일을 보냈습니다.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "QR 이메일을 보낼 수 없습니다.");
     } finally {
       setLoading(false);
     }
@@ -224,10 +190,6 @@ export default function ParticipantsAdminPage() {
           <label>
             이메일
             <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} style={styles.input} />
-          </label>
-          <label style={styles.checkboxLabel}>
-            <input type="checkbox" checked={sendOnRegister} onChange={(event) => setSendOnRegister(event.target.checked)} />
-            등록 후 QR 이메일 보내기
           </label>
           <button disabled={loading} style={styles.button}>
             {loading ? "처리 중..." : "멤버 등록"}
@@ -251,11 +213,8 @@ export default function ParticipantsAdminPage() {
           QR이 없는 기존 멤버에게는 새 QR을 발급하고, 이미 QR이 있는 멤버는 재발급으로 기존 코드를 새 코드로 교체합니다.
         </p>
         <div style={styles.actions}>
-          <button disabled={loading || missingQrCount === 0} onClick={() => issueMissingQr(false)} style={styles.button}>
+          <button disabled={loading || missingQrCount === 0} onClick={issueMissingQr} style={styles.button}>
             미발급 멤버 전체 발급 ({missingQrCount})
-          </button>
-          <button disabled={loading || missingQrCount === 0} onClick={() => issueMissingQr(true)} style={styles.secondaryButton}>
-            미발급 전체 발급 + 이메일
           </button>
           <button disabled={listLoading} onClick={loadParticipants} style={styles.secondaryButton}>
             새로고침
@@ -266,50 +225,53 @@ export default function ParticipantsAdminPage() {
           <p>멤버 목록을 불러오는 중...</p>
         ) : (
           <div style={styles.table}>
-            {filteredParticipants.map((participant) => (
-              <article key={participant.id} style={styles.memberRow}>
-                <div>
-                  <strong>{participant.name || "이름 없음"}</strong>
-                  <p style={styles.muted}>{participant.email ?? "이메일 없음"}</p>
-                  <p style={styles.code}>{participant.unique_code || "QR 미발급"}</p>
-                </div>
-                <div style={styles.rowActions}>
-                  <button disabled={loading || !participant.unique_code} onClick={() => showQr(participant)} style={styles.smallButton}>
-                    QR 보기
-                  </button>
-                  {!participant.unique_code && (
-                    <button disabled={loading} onClick={() => issueQr(participant)} style={styles.smallButton}>
-                      QR 발급
-                    </button>
+            {filteredParticipants.map((participant) => {
+              const isSelected = selectedParticipantId === participant.id;
+
+              return (
+                <article key={participant.id} style={styles.memberRow}>
+                  <div style={styles.memberSummary}>
+                    <div>
+                      <strong>{participant.name || "이름 없음"}</strong>
+                      <p style={styles.muted}>{participant.email ?? "이메일 없음"}</p>
+                      <p style={styles.code}>{participant.unique_code || "QR 미발급"}</p>
+                    </div>
+                    <div style={styles.rowActions}>
+                      <button disabled={loading || !participant.unique_code} onClick={() => showQr(participant)} style={styles.smallButton}>
+                        QR 보기
+                      </button>
+                      {!participant.unique_code && (
+                        <button disabled={loading} onClick={() => issueQr(participant)} style={styles.smallButton}>
+                          QR 발급
+                        </button>
+                      )}
+                      {participant.unique_code && (
+                        <button disabled={loading} onClick={() => issueQr(participant, true)} style={styles.smallDangerButton}>
+                          재발급
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {isSelected && (
+                    <div style={styles.inlineQr}>
+                      <h3 style={styles.inlineQrTitle}>{participant.name} QR 코드</h3>
+                      <p style={styles.code}>{participant.unique_code || "QR 미발급"}</p>
+                      {qrImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={qrImage} alt={`${participant.name}님의 QR 코드`} width={260} />
+                      ) : (
+                        <p>아직 QR 코드가 발급되지 않았습니다.</p>
+                      )}
+                    </div>
                   )}
-                  {participant.unique_code && (
-                    <button disabled={loading} onClick={() => issueQr(participant, { reissue: true })} style={styles.smallDangerButton}>
-                      재발급
-                    </button>
-                  )}
-                  <button disabled={loading || !participant.email || !participant.unique_code} onClick={() => emailQr(participant)} style={styles.smallButton}>
-                    이메일 발송
-                  </button>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
             {filteredParticipants.length === 0 && <p>검색 결과가 없습니다.</p>}
           </div>
         )}
       </section>
-
-      {selectedParticipant && (
-        <section style={{ ...styles.card, textAlign: "center" }}>
-          <h2>{selectedParticipant.name}</h2>
-          <p style={styles.code}>{selectedParticipant.unique_code || "QR 미발급"}</p>
-          {qrImage ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={qrImage} alt={`${selectedParticipant.name}님의 QR 코드`} width={320} />
-          ) : (
-            <p>아직 QR 코드가 발급되지 않았습니다.</p>
-          )}
-        </section>
-      )}
     </main>
   );
 }
@@ -320,7 +282,6 @@ const styles: Record<string, React.CSSProperties> = {
   form: { display: "grid", gap: 16 },
   input: { display: "block", width: "100%", marginTop: 6, padding: 10, border: "1px solid #bbb", borderRadius: 6 },
   searchInput: { display: "block", width: "100%", margin: "12px 0", padding: 12, border: "1px solid #999", borderRadius: 8 },
-  checkboxLabel: { display: "flex", alignItems: "center", gap: 8 },
   button: { padding: 12, border: 0, borderRadius: 6, background: "#111", color: "#fff", cursor: "pointer" },
   secondaryButton: { padding: 12, border: "1px solid #bbb", borderRadius: 6, background: "#fff", color: "#111", cursor: "pointer" },
   notice: { color: "#075985", background: "#e0f2fe", padding: 12, borderRadius: 8 },
@@ -328,8 +289,11 @@ const styles: Record<string, React.CSSProperties> = {
   code: { fontFamily: "monospace", fontSize: 14, margin: "4px 0" },
   actions: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 },
   table: { display: "grid", gap: 10 },
-  memberRow: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 14, alignItems: "center", border: "1px solid #eee", borderRadius: 10, padding: 14 },
+  memberRow: { display: "grid", gap: 14, border: "1px solid #eee", borderRadius: 10, padding: 14 },
+  memberSummary: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 14, alignItems: "center" },
   rowActions: { display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" },
   smallButton: { padding: "8px 10px", border: "1px solid #bbb", borderRadius: 6, background: "#fff", color: "#111", cursor: "pointer" },
   smallDangerButton: { padding: "8px 10px", border: "1px solid #fca5a5", borderRadius: 6, background: "#fff1f2", color: "#9f1239", cursor: "pointer" },
+  inlineQr: { borderTop: "1px solid #eee", paddingTop: 14, textAlign: "center", background: "#fafafa", borderRadius: 8 },
+  inlineQrTitle: { margin: "0 0 8px" },
 };
