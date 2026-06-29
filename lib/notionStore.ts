@@ -7,7 +7,17 @@ import { notion } from "@/lib/notion";
 
 const memberProperties = {
   title: "이름",
+  role: "직책",
+  team: "팀",
+  memo: "메모",
+  gender: "젠더",
   email: "이메일",
+  kakao: "카카오톡",
+  phone: "번호",
+  instagram: "인스타",
+  joinDate: "입사일",
+  grade: "학년",
+  active: "활동중",
   uniqueCode: "유니크 코드",
 } as const;
 
@@ -15,6 +25,13 @@ const challengeProperties = {
   title: "Challenge Name",
   date: "Date",
   participants: "참여명단",
+} as const;
+
+const paymentProperties = {
+  title: "Name",
+  uniqueCode: "Code",
+  item: "Item",
+  amount: "Price",
 } as const;
 
 function requiredEnv(name: string) {
@@ -31,6 +48,10 @@ function membersDataSourceId() {
 
 function challengesDataSourceId() {
   return requiredEnv("NOTION_CHECKINS_DATA_SOURCE_ID");
+}
+
+function paymentsDataSourceId() {
+  return requiredEnv("NOTION_PAYMENTS_DATA_SOURCE_ID");
 }
 
 function requireFullPage(result: unknown): PageObjectResponse {
@@ -66,6 +87,66 @@ function relationIds(page: PageObjectResponse, property: string) {
     : [];
 }
 
+function optionalRichText(value: string | null | undefined) {
+  return value ? { rich_text: [{ text: { content: value } }] } : undefined;
+}
+
+function optionalSelect(value: string | null | undefined) {
+  return value ? { select: { name: value } } : undefined;
+}
+
+function optionalDate(value: string | null | undefined) {
+  return value ? { date: { start: value } } : undefined;
+}
+
+type ParticipantRegistrationInput = {
+  name: string;
+  email: string | null;
+  uniqueCode: string;
+  role?: string | null;
+  team?: string | null;
+  memo?: string | null;
+  gender?: string | null;
+  kakao?: string | null;
+  phone?: string | null;
+  instagram?: string | null;
+  joinDate?: string | null;
+  grade?: string | null;
+  active?: boolean;
+};
+
+function registrationProperties(input: ParticipantRegistrationInput) {
+  const extraProperties = {
+    [memberProperties.role]: optionalSelect(input.role),
+    [memberProperties.team]: optionalSelect(input.team),
+    [memberProperties.memo]: optionalRichText(input.memo),
+    [memberProperties.gender]: optionalSelect(input.gender),
+    [memberProperties.kakao]: optionalRichText(input.kakao),
+    [memberProperties.phone]: input.phone
+      ? { phone_number: input.phone }
+      : undefined,
+    [memberProperties.instagram]: optionalRichText(input.instagram),
+    [memberProperties.joinDate]: optionalDate(input.joinDate),
+    [memberProperties.grade]: optionalSelect(input.grade),
+    [memberProperties.active]: { checkbox: input.active ?? true },
+  };
+
+  return {
+    [memberProperties.title]: {
+      title: [{ text: { content: input.name } }],
+    },
+    [memberProperties.email]: {
+      email: input.email,
+    },
+    [memberProperties.uniqueCode]: {
+      rich_text: [{ text: { content: input.uniqueCode } }],
+    },
+    ...Object.fromEntries(
+      Object.entries(extraProperties).filter((entry) => entry[1] !== undefined),
+    ),
+  };
+}
+
 export async function findParticipantByCode(uniqueCode: string) {
   const response = await notion.dataSources.query({
     data_source_id: membersDataSourceId(),
@@ -80,12 +161,7 @@ export async function findParticipantByCode(uniqueCode: string) {
   if (!result) return null;
   const page = requireFullPage(result);
 
-  return {
-    id: page.id,
-    name: title(page, memberProperties.title),
-    email: email(page, memberProperties.email),
-    unique_code: richText(page, memberProperties.uniqueCode),
-  };
+  return participantFromPage(page);
 }
 
 function participantFromPage(page: PageObjectResponse) {
@@ -127,13 +203,15 @@ export async function findParticipantDuplicate(input: {
   const normalizedName = input.name.trim().toLocaleLowerCase();
   const normalizedEmail = input.email?.trim().toLocaleLowerCase();
 
-  return participants.find((participant) => {
-    if (normalizedEmail && participant.email?.toLocaleLowerCase() === normalizedEmail) {
-      return true;
-    }
+  return (
+    participants.find((participant) => {
+      if (normalizedEmail) {
+        return participant.email?.toLocaleLowerCase() === normalizedEmail;
+      }
 
-    return participant.name.trim().toLocaleLowerCase() === normalizedName;
-  }) ?? null;
+      return participant.name.trim().toLocaleLowerCase() === normalizedName;
+    }) ?? null
+  );
 }
 
 export async function updateParticipantCode(
@@ -159,24 +237,10 @@ export async function getParticipantById(participantId: string) {
   return participantFromPage(page);
 }
 
-export async function createParticipant(input: {
-  name: string;
-  email: string | null;
-  uniqueCode: string;
-}) {
+export async function createParticipant(input: ParticipantRegistrationInput) {
   const page = await notion.pages.create({
     parent: { data_source_id: membersDataSourceId() },
-    properties: {
-      [memberProperties.title]: {
-        title: [{ text: { content: input.name } }],
-      },
-      [memberProperties.email]: {
-        email: input.email,
-      },
-      [memberProperties.uniqueCode]: {
-        rich_text: [{ text: { content: input.uniqueCode } }],
-      },
-    },
+    properties: registrationProperties(input),
   });
 
   return {
@@ -185,6 +249,20 @@ export async function createParticipant(input: {
     email: input.email,
     unique_code: input.uniqueCode,
   };
+}
+
+export async function updateParticipantRegistration(
+  participantId: string,
+  input: ParticipantRegistrationInput,
+) {
+  const page = requireFullPage(
+    await notion.pages.update({
+      page_id: participantId,
+      properties: registrationProperties(input),
+    }),
+  );
+
+  return participantFromPage(page);
 }
 
 async function findChallengePage(challenge: string, date: string) {
@@ -261,12 +339,10 @@ export async function getChallengeNames() {
       sorts: [{ timestamp: "created_time", direction: "descending" }],
     });
 
-    response.results
-      .filter(isFullPage)
-      .forEach((page) => {
-        const name = title(page, challengeProperties.title).trim();
-        if (name) names.add(name);
-      });
+    response.results.filter(isFullPage).forEach((page) => {
+      const name = title(page, challengeProperties.title).trim();
+      if (name) names.add(name);
+    });
 
     cursor = response.next_cursor ?? undefined;
   } while (cursor);
@@ -280,16 +356,44 @@ export async function getCheckins(challenge: string, date: string) {
 
   const participantIds = relationIds(page, challengeProperties.participants);
   const participants = await Promise.all(
-    participantIds.map(async (id) => requireFullPage(await notion.pages.retrieve({ page_id: id }))),
+    participantIds.map(async (id) =>
+      requireFullPage(await notion.pages.retrieve({ page_id: id })),
+    ),
   );
 
   return participants.map((participant) => ({
-      id: participant.id,
-      checked_in_at: page.last_edited_time,
-      method: "qr",
-      participants: {
-        name: title(participant, memberProperties.title),
-        email: email(participant, memberProperties.email),
+    id: participant.id,
+    checked_in_at: page.last_edited_time,
+    method: "qr",
+    participants: {
+      name: title(participant, memberProperties.title),
+      email: email(participant, memberProperties.email),
+    },
+  }));
+}
+
+export async function createPayment(input: {
+  participantId: string;
+  participantName: string;
+  uniqueCode: string;
+  amount: number;
+  item: string;
+}) {
+  return notion.pages.create({
+    parent: { data_source_id: paymentsDataSourceId() },
+    properties: {
+      [paymentProperties.title]: {
+        title: [{ text: { content: input.participantName } }],
       },
-    }));
+      [paymentProperties.uniqueCode]: {
+        rich_text: [{ text: { content: input.uniqueCode } }],
+      },
+      [paymentProperties.item]: {
+        rich_text: [{ text: { content: input.item } }],
+      },
+      [paymentProperties.amount]: {
+        rich_text: [{ text: { content: String(input.amount) } }],
+      },
+    },
+  });
 }
