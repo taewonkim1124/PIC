@@ -14,7 +14,7 @@ const memberProperties = {
 const challengeProperties = {
   title: "Challenge Name",
   date: "Date",
-  participants: "Participants",
+  participants: "참여명단",
 } as const;
 
 function requiredEnv(name: string) {
