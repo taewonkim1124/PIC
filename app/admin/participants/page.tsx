@@ -151,7 +151,7 @@ export default function ParticipantsAdminPage() {
     }
   }
 
-  async function issueMissingQr() {
+  async function issueMissingQr(sendEmail = false) {
     setLoading(true);
     setMessage("");
 
@@ -159,7 +159,7 @@ export default function ParticipantsAdminPage() {
       const response = await fetch("/api/participants/qr", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sendEmail: false }),
+        body: JSON.stringify({ sendEmail }),
       });
       const result = await response.json();
 
@@ -168,9 +168,37 @@ export default function ParticipantsAdminPage() {
       }
 
       await loadParticipants();
-      setMessage(`${result.count}명의 기존 멤버에게 QR 코드를 새로 발급했습니다.`);
+      setMessage(
+        sendEmail
+          ? `${result.count}명의 기존 멤버에게 QR 코드를 새로 발급하고 이메일을 보냈습니다.`
+          : `${result.count}명의 기존 멤버에게 QR 코드를 새로 발급했습니다.`,
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "미발급 멤버 QR 코드를 발급할 수 없습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function emailQr(participant: Participant) {
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/participants/email-qr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantId: participant.id }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "QR 이메일을 보낼 수 없습니다.");
+      }
+
+      setMessage(`${participant.name}님에게 QR 이메일을 보냈습니다.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "QR 이메일을 보낼 수 없습니다.");
     } finally {
       setLoading(false);
     }
@@ -213,8 +241,11 @@ export default function ParticipantsAdminPage() {
           QR이 없는 기존 멤버에게는 새 QR을 발급하고, 이미 QR이 있는 멤버는 재발급으로 기존 코드를 새 코드로 교체합니다.
         </p>
         <div style={styles.actions}>
-          <button disabled={loading || missingQrCount === 0} onClick={issueMissingQr} style={styles.button}>
+          <button disabled={loading || missingQrCount === 0} onClick={() => issueMissingQr(false)} style={styles.button}>
             미발급 멤버 전체 발급 ({missingQrCount})
+          </button>
+          <button disabled={loading || missingQrCount === 0} onClick={() => issueMissingQr(true)} style={styles.secondaryButton}>
+            미발급 전체 발급 + 이메일
           </button>
           <button disabled={listLoading} onClick={loadParticipants} style={styles.secondaryButton}>
             새로고침
@@ -262,6 +293,9 @@ export default function ParticipantsAdminPage() {
                         재발급
                       </button>
                     )}
+                    <button disabled={loading || !participant.email || !participant.unique_code} onClick={() => emailQr(participant)} style={styles.smallButton}>
+                      이메일 발송
+                    </button>
                   </div>
                 </article>
               );
