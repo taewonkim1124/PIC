@@ -55,6 +55,49 @@ https://pic-beta-blue.vercel.app
 - 재발급해도 기존 참여 기록은 사라지지 않습니다.
 - 같은 이메일의 멤버를 중복 등록하지 않는 것이 중요합니다.
 
+### Google Form으로 멤버 등록하기
+
+공개 가입 페이지 대신 Google Form으로 신청서를 받고, 응답이 들어오면 자동으로 Notion Member DB에 저장할 수 있습니다.
+
+추천 Google Form 질문:
+
+| Google Form 질문 | 앱으로 보내는 값 |
+| --- | --- |
+| 이름 | `name` |
+| 직책 | `role` |
+| 팀 | `team` |
+| 메모 | `memo` |
+| 젠더 | `gender` |
+| 이메일 | `email` |
+| 카카오톡 | `kakao` |
+| 번호 | `phone` |
+| 인스타 | `instagram` |
+| 입사일 | `joinDate` |
+| 학년 | `grade` |
+
+동작 방식:
+
+1. 사람이 Google Form을 제출합니다.
+2. Google Form 응답이 Google Sheets에 쌓입니다.
+3. Google Sheets의 Apps Script가 `/api/google-form`으로 응답을 보냅니다.
+4. 앱이 Notion Member DB에 멤버를 생성하거나 기존 멤버를 업데이트합니다.
+5. 이메일이 있으면 QR 코드가 이메일로 발송됩니다.
+
+중복 처리:
+
+- 같은 이메일이 이미 있으면 새 멤버를 만들지 않고 기존 멤버 정보를 업데이트합니다.
+- 기존 멤버에게 QR 코드가 이미 있으면 그 QR 코드를 유지합니다.
+- 기존 멤버에게 QR 코드가 없으면 새 QR 코드를 발급합니다.
+
+Apps Script 설정 방법:
+
+1. Google Form 응답을 Google Sheets에 연결합니다.
+2. 응답 Google Sheet에서 `확장 프로그램` → `Apps Script`를 엽니다.
+3. Form 응답을 `/api/google-form`으로 보내는 스크립트를 추가합니다.
+4. Apps Script에서 쓰는 secret 값을 Vercel 환경변수 `GOOGLE_FORM_SECRET`과 같은 값으로 맞춥니다.
+5. Apps Script 왼쪽의 `트리거`에서 제출 시 자동 실행되도록 설정합니다.
+6. Vercel에도 `GOOGLE_FORM_SECRET` 환경변수를 등록하고 재배포합니다.
+
 ### QR 체크인
 
 ```text
