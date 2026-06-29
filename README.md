@@ -143,9 +143,19 @@ QR이 아직 없는 멤버는 `QR 발급` 버튼을 눌러 새 QR 코드를 만�
 
 | 속성 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| `Name` | Title | 멤버 이름 |
-| `Email` | Email | 멤버 이메일 |
-| `Unique Code` | Rich text | QR 코드 생성에 사용하는 고유 코드 |
+| `이름` | Title | 멤버 이름 |
+| `직책` | Select | 동아리 내 직책 |
+| `팀` | Select | 소속 팀 |
+| `메모` | Rich text | 기타 메모 |
+| `젠더` | Select | 젠더 |
+| `이메일` | Email | 멤버 이메일 |
+| `카카오톡` | Rich text | 카카오톡 ID 또는 이름 |
+| `번호` | Phone number | 전화번호 |
+| `인스타` | Rich text | 인스타그램 계정 |
+| `입사일` | Date | 동아리 입사일 |
+| `학년` | Select | 학년 |
+| `활동중` | Checkbox | 현재 활동 여부 |
+| `유니크 코드` | Rich text | QR 코드 생성에 사용하는 고유 코드 |
 
 ### 챌린지 데이터베이스
 

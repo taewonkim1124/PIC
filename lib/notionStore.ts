@@ -6,9 +6,9 @@ import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoint
 import { notion } from "@/lib/notion";
 
 const memberProperties = {
-  title: "Name",
-  email: "Email",
-  uniqueCode: "Unique Code",
+  title: "이름",
+  email: "이메일",
+  uniqueCode: "유니크 코드",
 } as const;
 
 const challengeProperties = {
