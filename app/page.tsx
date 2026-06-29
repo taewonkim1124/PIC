@@ -3,12 +3,6 @@ import type { CSSProperties } from "react";
 
 const menu = [
   {
-    href: "/join",
-    title: "가입 신청",
-    description: "멤버가 직접 정보를 제출하고 이메일로 개인 QR 코드를 받습니다.",
-    color: "#7c3aed",
-  },
-  {
     href: "/scan",
     title: "QR 체크인",
     description: "관리자가 멤버의 고유 QR을 스캔해서 챌린지 참여를 기록합니다.",
@@ -41,7 +35,7 @@ export default function Home() {
         <p style={styles.eyebrow}>PIC 동아리</p>
         <h1 style={styles.heading}>QR 체크인</h1>
         <p style={styles.subtitle}>
-          가입 신청부터 QR 발급, 챌린지 참여 확인까지 관리합니다.
+          QR 발급, 챌린지 참여 확인, 결제 장부까지 관리합니다.
         </p>
       </header>
 
@@ -57,8 +51,7 @@ export default function Home() {
       </section>
 
       <p style={styles.install}>
-        가입 양식은 <strong>/join</strong> 주소를 공유하면 됩니다. iPhone에서는
-        Safari 공유 메뉴에서 홈 화면에 추가할 수 있습니다.
+        iPhone에서는 Safari 공유 메뉴에서 홈 화면에 추가할 수 있습니다.
       </p>
     </main>
   );
