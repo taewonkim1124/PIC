@@ -98,6 +98,30 @@ Apps Script 설정 방법:
 5. Apps Script 왼쪽의 `트리거`에서 제출 시 자동 실행되도록 설정합니다.
 6. Vercel에도 `GOOGLE_FORM_SECRET` 환경변수를 등록하고 재배포합니다.
 
+자동 QR 이메일 발송 설정:
+
+1. Google 계정에서 2단계 인증을 켭니다.
+2. Google 계정 보안 설정에서 앱 비밀번호를 생성합니다.
+3. 앱 비밀번호 이름은 `PIC QR`처럼 알아보기 쉽게 설정합니다.
+4. `.env.local`에 Gmail 계정과 앱 비밀번호를 넣습니다.
+5. Vercel 환경변수에도 같은 값을 등록합니다.
+6. Vercel production을 재배포합니다.
+
+필요한 Gmail 환경변수:
+
+```env
+GMAIL_USER=your-gmail@gmail.com
+GMAIL_APP_PASSWORD=google-app-password
+```
+
+이 설정이 끝나면 Google Form 제출 시 다음 순서로 자동 처리됩니다.
+
+1. Form 응답이 Google Sheet에 저장됩니다.
+2. Apps Script가 `/api/google-form`으로 응답을 보냅니다.
+3. 앱이 Notion Member DB에 멤버를 생성하거나 업데이트합니다.
+4. QR 코드가 없으면 새로 발급합니다.
+5. 멤버 이메일로 QR 코드가 자동 발송됩니다.
+
 ### QR 체크인
 
 ```text
@@ -267,6 +291,7 @@ NOTION_PAYMENTS_DATABASE_ID=
 NOTION_PAYMENTS_DATA_SOURCE_ID=
 GMAIL_USER=
 GMAIL_APP_PASSWORD=
+GOOGLE_FORM_SECRET=
 ```
 
 주의:
