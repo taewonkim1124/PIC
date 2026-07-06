@@ -1,6 +1,5 @@
 import {
   createCheckin,
-  findCheckin,
   findParticipantByCode,
 } from "@/lib/notionStore";
 
@@ -41,7 +40,14 @@ export async function POST(request: Request) {
     }
 
     const checkinDate = serverDate();
-    if (await findCheckin(participant.id, challengeId, checkinDate)) {
+    const checkin = await createCheckin({
+      participantId: participant.id,
+      challenge: challengeId,
+      date: checkinDate,
+      currentParticipationCount: participant.participation_count,
+    });
+
+    if (checkin.alreadyCheckedIn) {
       return Response.json({
         status: "already_checked_in",
         participantName: participant.name,
@@ -49,12 +55,6 @@ export async function POST(request: Request) {
         message: `${participant.name}님은 오늘 이미 참여했습니다.`,
       });
     }
-
-    await createCheckin({
-      participantId: participant.id,
-      challenge: challengeId,
-      date: checkinDate,
-    });
 
     return Response.json(
       {

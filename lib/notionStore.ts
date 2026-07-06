@@ -82,6 +82,11 @@ function email(page: PageObjectResponse, property: string) {
   return value?.type === "email" ? value.email : null;
 }
 
+function number(page: PageObjectResponse, property: string) {
+  const value = page.properties[property];
+  return value?.type === "number" ? value.number : null;
+}
+
 function relationIds(page: PageObjectResponse, property: string) {
   const value = page.properties[property];
   return value?.type === "relation"
@@ -172,6 +177,7 @@ function participantFromPage(page: PageObjectResponse) {
     name: title(page, memberProperties.title),
     email: email(page, memberProperties.email),
     unique_code: richText(page, memberProperties.uniqueCode),
+    participation_count: number(page, memberProperties.participationCount),
   };
 }
 
@@ -315,8 +321,11 @@ async function countParticipationForParticipant(participantId: string) {
   return count;
 }
 
-async function updateMemberParticipationCount(participantId: string) {
-  const count = await countParticipationForParticipant(participantId);
+async function updateMemberParticipationCount(
+  participantId: string,
+  nextCount?: number | null,
+) {
+  const count = nextCount ?? (await countParticipationForParticipant(participantId));
 
   await notion.pages.update({
     page_id: participantId,
@@ -332,11 +341,15 @@ export async function createCheckin(input: {
   participantId: string;
   challenge: string;
   date: string;
+  currentParticipationCount?: number | null;
 }) {
   const page = await findChallengePage(input.challenge, input.date);
+  const nextMemberParticipationCount =
+    (input.currentParticipationCount ??
+      (await countParticipationForParticipant(input.participantId))) + 1;
 
   if (!page) {
-    const createdPage = await notion.pages.create({
+    await notion.pages.create({
       parent: { data_source_id: challengesDataSourceId() },
       properties: {
         [challengeProperties.title]: {
@@ -354,16 +367,23 @@ export async function createCheckin(input: {
       },
     });
 
-    await updateMemberParticipationCount(input.participantId);
-    return createdPage;
+    await updateMemberParticipationCount(
+      input.participantId,
+      nextMemberParticipationCount,
+    );
+    return { alreadyCheckedIn: false };
   }
 
   const participantIds = relationIds(page, challengeProperties.participants);
+  if (participantIds.includes(input.participantId)) {
+    return { alreadyCheckedIn: true };
+  }
+
   const nextParticipantIds = Array.from(
     new Set([...participantIds, input.participantId]),
   );
 
-  const updatedPage = await notion.pages.update({
+  await notion.pages.update({
     page_id: page.id,
     properties: {
       [challengeProperties.participants]: {
@@ -375,8 +395,11 @@ export async function createCheckin(input: {
     },
   });
 
-  await updateMemberParticipationCount(input.participantId);
-  return updatedPage;
+  await updateMemberParticipationCount(
+    input.participantId,
+    nextMemberParticipationCount,
+  );
+  return { alreadyCheckedIn: false };
 }
 
 export async function getChallengeNames() {
