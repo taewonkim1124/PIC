@@ -94,7 +94,7 @@ export default function ScanPage() {
       setBusy(false);
       window.setTimeout(() => {
         cooldownRef.current = false;
-      }, 1400);
+      }, 3000);
     }
   }
 
