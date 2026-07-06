@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { Html5Qrcode } from "html5-qrcode";
 
+type CameraOption = {
+  id: string;
+  label: string;
+};
+
 type CheckinResult = {
   status?: "checked_in" | "already_checked_in";
   participantName?: string;
@@ -17,8 +22,11 @@ export default function ScanPage() {
   const [challengeId, setChallengeId] = useState("");
   const [loadingChallenges, setLoadingChallenges] = useState(true);
   const [challengeError, setChallengeError] = useState("");
+  const [cameras, setCameras] = useState<CameraOption[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState("");
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [switchingCamera, setSwitchingCamera] = useState(false);
   const [result, setResult] = useState<CheckinResult | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const cooldownRef = useRef(false);
@@ -57,6 +65,26 @@ export default function ScanPage() {
     };
   }, []);
 
+  async function loadCameras() {
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      const devices = await Html5Qrcode.getCameras();
+      const options = devices.map((device, index) => ({
+        id: device.id,
+        label: device.label || `카메라 ${index + 1}`,
+      }));
+
+      setCameras(options);
+      if (!selectedCameraId && options[0]) {
+        setSelectedCameraId(options[0].id);
+      }
+
+      return options;
+    } catch {
+      return [];
+    }
+  }
+
   async function stopScanner() {
     if (cooldownTimerRef.current) {
       window.clearTimeout(cooldownTimerRef.current);
@@ -83,11 +111,13 @@ export default function ScanPage() {
     cooldownRef.current = true;
     busyRef.current = true;
     setBusy(true);
+
     try {
       scannerRef.current?.pause(true);
     } catch {
       // Some browsers may already pause the video stream internally.
     }
+
     setResult({ message: "체크인 처리 중..." });
 
     try {
@@ -118,6 +148,28 @@ export default function ScanPage() {
     }
   }
 
+  async function startScanner(cameraId?: string) {
+    const { Html5Qrcode } = await import("html5-qrcode");
+    const scanner = new Html5Qrcode("qr-reader", false);
+    scannerRef.current = scanner;
+
+    await scanner.start(
+      cameraId || { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      (decodedText) => {
+        void submitCheckin(decodedText.trim());
+      },
+      undefined,
+    );
+
+    const options = await loadCameras();
+    if (cameraId) {
+      setSelectedCameraId(cameraId);
+    } else if (!selectedCameraId && options[0]) {
+      setSelectedCameraId(options[0].id);
+    }
+  }
+
   async function startContinuousScan() {
     if (!challengeId || scannerRef.current) return;
 
@@ -128,18 +180,7 @@ export default function ScanPage() {
     cooldownRef.current = false;
 
     try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      const scanner = new Html5Qrcode("qr-reader", false);
-      scannerRef.current = scanner;
-
-      await scanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          void submitCheckin(decodedText.trim());
-        },
-        undefined,
-      );
+      await startScanner(selectedCameraId || undefined);
     } catch (error) {
       await stopScanner();
       setRunning(false);
@@ -161,6 +202,46 @@ export default function ScanPage() {
     await stopScanner();
   }
 
+  async function switchToCamera(cameraId: string) {
+    if (!cameraId || cameraId === selectedCameraId || switchingCamera) return;
+
+    setSwitchingCamera(true);
+    setSelectedCameraId(cameraId);
+    setResult(null);
+    busyRef.current = false;
+    cooldownRef.current = false;
+
+    try {
+      const shouldRestart = running;
+      await stopScanner();
+      if (shouldRestart && mountedRef.current) {
+        await startScanner(cameraId);
+      }
+    } catch (error) {
+      setRunning(false);
+      setResult({
+        error:
+          error instanceof Error
+            ? error.message
+            : "카메라를 전환하지 못했습니다.",
+      });
+    } finally {
+      setSwitchingCamera(false);
+    }
+  }
+
+  async function switchToNextCamera() {
+    const options = cameras.length > 0 ? cameras : await loadCameras();
+    if (options.length < 2) return;
+
+    const currentIndex = Math.max(
+      0,
+      options.findIndex((camera) => camera.id === selectedCameraId),
+    );
+    const nextCamera = options[(currentIndex + 1) % options.length];
+    await switchToCamera(nextCamera.id);
+  }
+
   const resultStyle =
     result?.error || result?.status === "already_checked_in"
       ? styles.warningResult
@@ -172,9 +253,8 @@ export default function ScanPage() {
         <p style={styles.eyebrow}>PIC 체크인</p>
         <h1 style={styles.title}>QR 연속 체크인</h1>
         <p style={styles.description}>
-          시작 버튼을 누르면 바로 카메라 권한 팝업이 뜹니다. 카메라가 켜진
-          뒤에는 QR을 스캔할 때마다 자동으로 체크인하고, 잠시 후 다음 QR을 받을
-          준비를 합니다.
+          시작 버튼을 누르면 바로 카메라 권한 팝업이 뜹니다. iPad에서 카메라가
+          여러 개 잡히면 카메라를 선택하거나 전환할 수 있습니다.
         </p>
 
         <label style={styles.label}>
@@ -197,20 +277,51 @@ export default function ScanPage() {
           </select>
         </label>
 
+        {cameras.length > 1 && (
+          <label style={styles.label}>
+            카메라
+            <select
+              value={selectedCameraId}
+              onChange={(event) => void switchToCamera(event.target.value)}
+              disabled={switchingCamera}
+              style={styles.input}
+            >
+              {cameras.map((camera) => (
+                <option key={camera.id} value={camera.id}>
+                  {camera.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         {challengeError && <p style={styles.error}>{challengeError}</p>}
 
         {!running ? (
           <button
-            disabled={!challengeId}
+            disabled={!challengeId || switchingCamera}
             onClick={startContinuousScan}
             style={styles.button}
           >
             연속 스캔 시작
           </button>
         ) : (
-          <button onClick={stopContinuousScan} style={styles.secondaryButton}>
-            연속 스캔 중지
-          </button>
+          <div style={styles.buttonGrid}>
+            <button
+              onClick={stopContinuousScan}
+              disabled={switchingCamera}
+              style={styles.secondaryButton}
+            >
+              연속 스캔 중지
+            </button>
+            <button
+              onClick={() => void switchToNextCamera()}
+              disabled={switchingCamera}
+              style={styles.secondaryButton}
+            >
+              {switchingCamera ? "카메라 전환 중..." : "다음 카메라로 전환"}
+            </button>
+          </div>
         )}
 
         <section style={styles.scannerWrap}>
@@ -268,7 +379,13 @@ const styles: Record<string, CSSProperties> = {
   },
   title: { margin: "8px 0", fontSize: 32, lineHeight: 1.2 },
   description: { margin: "0 0 24px", color: "#64748b", lineHeight: 1.6 },
-  label: { display: "grid", gap: 7, fontSize: 14, fontWeight: 700 },
+  label: {
+    display: "grid",
+    gap: 7,
+    marginTop: 14,
+    fontSize: 14,
+    fontWeight: 700,
+  },
   input: {
     width: "100%",
     boxSizing: "border-box",
@@ -277,6 +394,12 @@ const styles: Record<string, CSSProperties> = {
     padding: "12px 13px",
     fontSize: 15,
     background: "#ffffff",
+  },
+  buttonGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 10,
+    marginTop: 18,
   },
   button: {
     width: "100%",
@@ -292,7 +415,6 @@ const styles: Record<string, CSSProperties> = {
   },
   secondaryButton: {
     width: "100%",
-    marginTop: 18,
     border: "1px solid #cbd5e1",
     borderRadius: 12,
     padding: "14px 16px",
