@@ -22,6 +22,7 @@ export default function ScanPage() {
   const [result, setResult] = useState<CheckinResult | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const cooldownRef = useRef(false);
+  const cooldownTimerRef = useRef<number | null>(null);
   const busyRef = useRef(false);
   const mountedRef = useRef(true);
 
@@ -57,6 +58,11 @@ export default function ScanPage() {
   }, []);
 
   async function stopScanner() {
+    if (cooldownTimerRef.current) {
+      window.clearTimeout(cooldownTimerRef.current);
+      cooldownTimerRef.current = null;
+    }
+
     const scanner = scannerRef.current;
     scannerRef.current = null;
     if (!scanner) return;
@@ -77,6 +83,11 @@ export default function ScanPage() {
     cooldownRef.current = true;
     busyRef.current = true;
     setBusy(true);
+    try {
+      scannerRef.current?.pause(true);
+    } catch {
+      // Some browsers may already pause the video stream internally.
+    }
     setResult({ message: "체크인 처리 중..." });
 
     try {
@@ -92,8 +103,17 @@ export default function ScanPage() {
     } finally {
       busyRef.current = false;
       setBusy(false);
-      window.setTimeout(() => {
+      cooldownTimerRef.current = window.setTimeout(() => {
         cooldownRef.current = false;
+        cooldownTimerRef.current = null;
+
+        try {
+          if (scannerRef.current?.isScanning) {
+            scannerRef.current.resume();
+          }
+        } catch {
+          // The scanner may already be stopped by the user.
+        }
       }, 3000);
     }
   }
