@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import type { Html5QrcodeScanner } from "html5-qrcode";
+import type { Html5Qrcode } from "html5-qrcode";
 
 type ScanResult = {
   participantName?: string;
@@ -27,50 +27,67 @@ export default function PaymentPage() {
   const [saving, setSaving] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const handlingScan = useRef(false);
 
-  useEffect(() => {
-    if (!scanning) return;
+  async function stopScanner() {
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
+    if (!scanner) return;
 
-    let cancelled = false;
-
-    async function startScanner() {
-      const { Html5QrcodeScanner } = await import("html5-qrcode");
-      if (cancelled) return;
-
-      const scanner = new Html5QrcodeScanner(
-        "payment-qr-reader",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        false,
-      );
-      scannerRef.current = scanner;
-      scanner.render(async (decodedText) => {
-        if (handlingScan.current) return;
-        handlingScan.current = true;
-        await scanner.clear().catch(console.error);
-        scannerRef.current = null;
-        setScanning(false);
-        setPaymentResult(null);
-        setScanResult({ uniqueCode: decodedText });
-      }, undefined);
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+      await scanner.clear();
+    } catch {
+      // The browser can already release the camera during page changes.
     }
+  }
 
-    void startScanner();
-
+  useEffect(() => {
     return () => {
-      cancelled = true;
-      const scanner = scannerRef.current;
-      scannerRef.current = null;
-      if (scanner) void scanner.clear().catch(() => undefined);
+      void stopScanner();
     };
-  }, [scanning]);
+  }, []);
 
-  function startScan() {
+  async function startScan() {
+    if (scannerRef.current) return;
+
     handlingScan.current = false;
     setScanResult(null);
     setPaymentResult(null);
     setScanning(true);
+
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      const scanner = new Html5Qrcode("payment-qr-reader", false);
+      scannerRef.current = scanner;
+
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (decodedText) => {
+          if (handlingScan.current) return;
+
+          handlingScan.current = true;
+          await stopScanner();
+          setScanning(false);
+          setPaymentResult(null);
+          setScanResult({ uniqueCode: decodedText.trim() });
+        },
+        undefined,
+      );
+    } catch (error) {
+      await stopScanner();
+      setScanning(false);
+      setPaymentResult({
+        error:
+          error instanceof Error
+            ? error.message
+            : "카메라를 시작하지 못했습니다. 브라우저 권한을 확인해 주세요.",
+      });
+    }
   }
 
   function resetForNextPayment() {
@@ -126,8 +143,8 @@ export default function PaymentPage() {
         <p style={styles.eyebrow}>PIC 장부</p>
         <h1 style={styles.title}>QR 결제 기록</h1>
         <p style={styles.description}>
-          먼저 멤버 QR을 스캔한 다음, 아이템과 가격을 입력해서 Notion Payments
-          장부에 저장합니다.
+          먼저 멤버 QR을 한 번 스캔한 다음, 아이템과 가격을 입력해서 Notion
+          Payments 장부에 저장합니다.
         </p>
 
         {!scanning && !scanResult && !paymentResult && (
@@ -136,7 +153,12 @@ export default function PaymentPage() {
           </button>
         )}
 
-        {scanning && <div id="payment-qr-reader" style={styles.reader} />}
+        {scanning && (
+          <section style={styles.scannerWrap}>
+            <div id="payment-qr-reader" style={styles.reader} />
+            <p style={styles.status}>QR을 한 번 스캔하면 자동으로 카메라가 꺼집니다.</p>
+          </section>
+        )}
 
         {scanResult?.uniqueCode && (
           <section style={styles.scannedBox}>
@@ -268,7 +290,24 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     cursor: "pointer",
   },
-  reader: { width: "100%", marginTop: 18, background: "#fff" },
+  scannerWrap: { marginTop: 18 },
+  reader: {
+    width: "100%",
+    minHeight: 260,
+    overflow: "hidden",
+    border: "1px solid #cbd5e1",
+    borderRadius: 12,
+    background: "#ffffff",
+  },
+  status: {
+    margin: "12px 0 0",
+    padding: 12,
+    borderRadius: 10,
+    background: "#e0f2fe",
+    color: "#075985",
+    textAlign: "center",
+    fontWeight: 800,
+  },
   scannedBox: {
     marginTop: 18,
     padding: 18,
