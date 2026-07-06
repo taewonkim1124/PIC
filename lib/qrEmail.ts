@@ -1,7 +1,7 @@
 import "server-only";
 
+import nodemailer from "nodemailer";
 import QRCode from "qrcode";
-import { Resend } from "resend";
 
 type Participant = {
   name: string;
@@ -17,42 +17,54 @@ export async function createQrDataUrl(uniqueCode: string) {
   });
 }
 
-export async function sendQrEmail(participant: Participant) {
-  if (!participant.email) {
-    throw new Error("이메일 주소가 없는 멤버입니다.");
+function emailHtml(participant: Participant) {
+  return `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+      <h1>PIC Member QR Code</h1>
+      <p>Hello ${participant.name}, please use the attached QR code when checking in.</p>
+      <p><strong>Unique Code:</strong> ${participant.unique_code}</p>
+    </div>
+  `;
+}
+
+async function sendWithGmail(participant: Participant, qrBase64: string) {
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD;
+
+  if (!user || !pass) {
+    throw new Error(
+      "Gmail SMTP is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD.",
+    );
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.QR_EMAIL_FROM;
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
 
-  if (!apiKey || !from) {
-    throw new Error("이메일 발송 환경변수가 설정되지 않았습니다.");
+  await transporter.sendMail({
+    from: `"PIC" <${user}>`,
+    to: participant.email ?? undefined,
+    subject: "[PIC] Member QR Code",
+    html: emailHtml(participant),
+    attachments: [
+      {
+        filename: `${participant.name}-pic-qr.png`,
+        content: Buffer.from(qrBase64, "base64"),
+        contentType: "image/png",
+      },
+    ],
+  });
+
+}
+
+export async function sendQrEmail(participant: Participant) {
+  if (!participant.email) {
+    throw new Error("This member does not have an email address.");
   }
 
   const qrDataUrl = await createQrDataUrl(participant.unique_code);
   const qrBase64 = qrDataUrl.split(",")[1];
 
-  const resend = new Resend(apiKey);
-  const { error } = await resend.emails.send({
-    from,
-    to: [participant.email],
-    subject: "[PIC] Member QR Code",
-    html: `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-        <h1>PIC Member QR Code</h1>
-        <p>Hello ${participant.name}, please use the attached QR code when checking in.</p>
-        <p><strong>Unique Code:</strong> ${participant.unique_code}</p>
-      </div>
-    `,
-    attachments: [
-      {
-        filename: `${participant.name}-pic-qr.png`,
-        content: qrBase64,
-      },
-    ],
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  await sendWithGmail(participant, qrBase64);
 }

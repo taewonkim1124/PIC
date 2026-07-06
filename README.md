@@ -265,12 +265,12 @@ NOTION_CHECKINS_DATABASE_ID=
 NOTION_CHECKINS_DATA_SOURCE_ID=
 NOTION_PAYMENTS_DATABASE_ID=
 NOTION_PAYMENTS_DATA_SOURCE_ID=
-RESEND_API_KEY=
-QR_EMAIL_FROM=
+GMAIL_USER=
+GMAIL_APP_PASSWORD=
 ```
 
 주의:
 
 - `.env.local`은 GitHub에 올리면 안 됩니다.
-- Notion 토큰과 Resend API 키는 외부에 공유하면 안 됩니다.
+- Notion 토큰과 Gmail 앱 비밀번호는 외부에 공유하면 안 됩니다.
 - Vercel 배포 시에도 같은 환경변수를 Vercel 프로젝트 설정에 등록해야 합니다.
