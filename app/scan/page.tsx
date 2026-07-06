@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import type { Html5QrcodeScanner } from "html5-qrcode";
+import type { Html5Qrcode } from "html5-qrcode";
 
 type CheckinResult = {
   status?: "checked_in" | "already_checked_in";
@@ -20,12 +20,14 @@ export default function ScanPage() {
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CheckinResult | null>(null);
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const cooldownRef = useRef(false);
-  const lastCodeRef = useRef("");
   const busyRef = useRef(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
+
     async function loadChallenges() {
       try {
         const response = await fetch("/api/challenges", { cache: "no-store" });
@@ -39,7 +41,7 @@ export default function ScanPage() {
         setChallengeError(
           error instanceof Error
             ? error.message
-            : "챌린지 목록을 불러올 수 없습니다.",
+            : "챌린지 목록을 불러오지 못했습니다.",
         );
       } finally {
         setLoadingChallenges(false);
@@ -47,79 +49,96 @@ export default function ScanPage() {
     }
 
     void loadChallenges();
-  }, []);
-
-  useEffect(() => {
-    if (!running) return;
-
-    let cancelled = false;
-
-    async function startScanner() {
-      const { Html5QrcodeScanner } = await import("html5-qrcode");
-      if (cancelled || scannerRef.current) return;
-
-      const scanner = new Html5QrcodeScanner(
-        "qr-reader",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        false,
-      );
-      scannerRef.current = scanner;
-
-      scanner.render(async (decodedText) => {
-        const uniqueCode = decodedText.trim();
-        if (!uniqueCode || cooldownRef.current || busyRef.current) return;
-
-        cooldownRef.current = true;
-        busyRef.current = true;
-        lastCodeRef.current = uniqueCode;
-        setBusy(true);
-        setResult({ message: "체크인 저장 중..." });
-
-        try {
-          const response = await fetch("/api/checkin", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ uniqueCode, challengeId }),
-          });
-          const data = (await response.json()) as CheckinResult;
-          setResult(data);
-        } catch {
-          setResult({ error: "체크인 서버에 연결할 수 없습니다." });
-        } finally {
-          busyRef.current = false;
-          setBusy(false);
-          window.setTimeout(() => {
-            cooldownRef.current = false;
-          }, 1400);
-        }
-      }, undefined);
-    }
-
-    void startScanner();
 
     return () => {
-      cancelled = true;
-      const scanner = scannerRef.current;
-      scannerRef.current = null;
-      if (scanner) void scanner.clear().catch(() => undefined);
+      mountedRef.current = false;
+      void stopScanner();
     };
-  }, [challengeId, running]);
+  }, []);
 
-  function startContinuousScan() {
-    setResult(null);
-    setRunning(true);
-    busyRef.current = false;
-    cooldownRef.current = false;
-    lastCodeRef.current = "";
+  async function stopScanner() {
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
+    if (!scanner) return;
+
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+      await scanner.clear();
+    } catch {
+      // The browser can already release the camera during page changes.
+    }
   }
 
-  function stopContinuousScan() {
+  async function submitCheckin(uniqueCode: string) {
+    if (!uniqueCode || cooldownRef.current || busyRef.current) return;
+
+    cooldownRef.current = true;
+    busyRef.current = true;
+    setBusy(true);
+    setResult({ message: "체크인 처리 중..." });
+
+    try {
+      const response = await fetch("/api/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uniqueCode, challengeId }),
+      });
+      const data = (await response.json()) as CheckinResult;
+      setResult(data);
+    } catch {
+      setResult({ error: "체크인 서버에 연결하지 못했습니다." });
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+      window.setTimeout(() => {
+        cooldownRef.current = false;
+      }, 1400);
+    }
+  }
+
+  async function startContinuousScan() {
+    if (!challengeId || scannerRef.current) return;
+
+    setResult(null);
+    setRunning(true);
+    setBusy(false);
+    busyRef.current = false;
+    cooldownRef.current = false;
+
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      const scanner = new Html5Qrcode("qr-reader", false);
+      scannerRef.current = scanner;
+
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          void submitCheckin(decodedText.trim());
+        },
+        undefined,
+      );
+    } catch (error) {
+      await stopScanner();
+      setRunning(false);
+      setResult({
+        error:
+          error instanceof Error
+            ? error.message
+            : "카메라를 시작하지 못했습니다. 브라우저 권한을 확인해 주세요.",
+      });
+    }
+  }
+
+  async function stopContinuousScan() {
     setRunning(false);
     setBusy(false);
     busyRef.current = false;
     cooldownRef.current = false;
-    lastCodeRef.current = "";
     setResult(null);
+    await stopScanner();
   }
 
   const resultStyle =
@@ -133,8 +152,9 @@ export default function ScanPage() {
         <p style={styles.eyebrow}>PIC 체크인</p>
         <h1 style={styles.title}>QR 연속 체크인</h1>
         <p style={styles.description}>
-          카메라를 한 번 켜두면 QR을 스캔할 때마다 자동으로 체크인하고, 잠시
-          후 다음 QR을 받을 준비를 합니다.
+          시작 버튼을 누르면 바로 카메라 권한 팝업이 뜹니다. 카메라가 켜진
+          뒤에는 QR을 스캔할 때마다 자동으로 체크인하고, 잠시 후 다음 QR을 받을
+          준비를 합니다.
         </p>
 
         <label style={styles.label}>
@@ -173,14 +193,20 @@ export default function ScanPage() {
           </button>
         )}
 
-        {running && (
-          <section style={styles.scannerWrap}>
-            <div id="qr-reader" style={styles.reader} />
+        <section style={styles.scannerWrap}>
+          <div id="qr-reader" style={styles.reader}>
+            {!running && (
+              <p style={styles.placeholder}>
+                연속 스캔 시작 버튼을 누르면 카메라가 켜집니다.
+              </p>
+            )}
+          </div>
+          {running && (
             <p style={styles.status}>
-              {busy ? "저장 중..." : "다음 QR을 스캔할 준비가 됐습니다."}
+              {busy ? "체크인 처리 중..." : "다음 QR을 스캔할 준비가 됐습니다."}
             </p>
-          </section>
-        )}
+          )}
+        </section>
 
         {result && (
           <section style={resultStyle}>
@@ -257,7 +283,23 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   scannerWrap: { marginTop: 18 },
-  reader: { width: "100%", background: "#fff" },
+  reader: {
+    width: "100%",
+    minHeight: 260,
+    display: "grid",
+    placeItems: "center",
+    overflow: "hidden",
+    border: "1px solid #cbd5e1",
+    borderRadius: 12,
+    background: "#ffffff",
+  },
+  placeholder: {
+    margin: 0,
+    padding: 20,
+    color: "#64748b",
+    textAlign: "center",
+    fontWeight: 700,
+  },
   status: {
     margin: "12px 0 0",
     padding: 12,
