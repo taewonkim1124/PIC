@@ -25,6 +25,7 @@ const challengeProperties = {
   title: "Challenge Name",
   date: "Date",
   participants: "참여명단",
+  participantCount: "Participant Count",
 } as const;
 
 const paymentProperties = {
@@ -311,17 +312,26 @@ export async function createCheckin(input: {
         [challengeProperties.participants]: {
           relation: [{ id: input.participantId }],
         },
+        [challengeProperties.participantCount]: {
+          number: 1,
+        },
       },
     });
   }
 
   const participantIds = relationIds(page, challengeProperties.participants);
+  const nextParticipantIds = Array.from(
+    new Set([...participantIds, input.participantId]),
+  );
 
   return notion.pages.update({
     page_id: page.id,
     properties: {
       [challengeProperties.participants]: {
-        relation: [...participantIds, input.participantId].map((id) => ({ id })),
+        relation: nextParticipantIds.map((id) => ({ id })),
+      },
+      [challengeProperties.participantCount]: {
+        number: nextParticipantIds.length,
       },
     },
   });
