@@ -4,10 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { Html5Qrcode } from "html5-qrcode";
 
-type CameraOption = {
-  id: string;
-  label: string;
-};
+type CameraMode = "environment" | "user";
 
 type CheckinResult = {
   status?: "checked_in" | "already_checked_in";
@@ -17,13 +14,17 @@ type CheckinResult = {
   error?: string;
 };
 
+const cameraLabels: Record<CameraMode, string> = {
+  environment: "후면 카메라",
+  user: "전면 카메라",
+};
+
 export default function ScanPage() {
   const [challenges, setChallenges] = useState<string[]>([]);
   const [challengeId, setChallengeId] = useState("");
   const [loadingChallenges, setLoadingChallenges] = useState(true);
   const [challengeError, setChallengeError] = useState("");
-  const [cameras, setCameras] = useState<CameraOption[]>([]);
-  const [selectedCameraId, setSelectedCameraId] = useState("");
+  const [cameraMode, setCameraMode] = useState<CameraMode>("environment");
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [switchingCamera, setSwitchingCamera] = useState(false);
@@ -64,26 +65,6 @@ export default function ScanPage() {
       void stopScanner();
     };
   }, []);
-
-  async function loadCameras() {
-    try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      const devices = await Html5Qrcode.getCameras();
-      const options = devices.map((device, index) => ({
-        id: device.id,
-        label: device.label || `카메라 ${index + 1}`,
-      }));
-
-      setCameras(options);
-      if (!selectedCameraId && options[0]) {
-        setSelectedCameraId(options[0].id);
-      }
-
-      return options;
-    } catch {
-      return [];
-    }
-  }
 
   async function stopScanner() {
     if (cooldownTimerRef.current) {
@@ -148,26 +129,19 @@ export default function ScanPage() {
     }
   }
 
-  async function startScanner(cameraId?: string) {
+  async function startScanner(mode: CameraMode) {
     const { Html5Qrcode } = await import("html5-qrcode");
     const scanner = new Html5Qrcode("qr-reader", false);
     scannerRef.current = scanner;
 
     await scanner.start(
-      cameraId || { facingMode: "environment" },
+      { facingMode: mode },
       { fps: 10, qrbox: { width: 250, height: 250 } },
       (decodedText) => {
         void submitCheckin(decodedText.trim());
       },
       undefined,
     );
-
-    const options = await loadCameras();
-    if (cameraId) {
-      setSelectedCameraId(cameraId);
-    } else if (!selectedCameraId && options[0]) {
-      setSelectedCameraId(options[0].id);
-    }
   }
 
   async function startContinuousScan() {
@@ -180,7 +154,7 @@ export default function ScanPage() {
     cooldownRef.current = false;
 
     try {
-      await startScanner(selectedCameraId || undefined);
+      await startScanner(cameraMode);
     } catch (error) {
       await stopScanner();
       setRunning(false);
@@ -202,11 +176,11 @@ export default function ScanPage() {
     await stopScanner();
   }
 
-  async function switchToCamera(cameraId: string) {
-    if (!cameraId || cameraId === selectedCameraId || switchingCamera) return;
+  async function switchCamera(nextMode: CameraMode) {
+    if (nextMode === cameraMode || switchingCamera) return;
 
     setSwitchingCamera(true);
-    setSelectedCameraId(cameraId);
+    setCameraMode(nextMode);
     setResult(null);
     busyRef.current = false;
     cooldownRef.current = false;
@@ -215,7 +189,7 @@ export default function ScanPage() {
       const shouldRestart = running;
       await stopScanner();
       if (shouldRestart && mountedRef.current) {
-        await startScanner(cameraId);
+        await startScanner(nextMode);
       }
     } catch (error) {
       setRunning(false);
@@ -231,15 +205,7 @@ export default function ScanPage() {
   }
 
   async function switchToNextCamera() {
-    const options = cameras.length > 0 ? cameras : await loadCameras();
-    if (options.length < 2) return;
-
-    const currentIndex = Math.max(
-      0,
-      options.findIndex((camera) => camera.id === selectedCameraId),
-    );
-    const nextCamera = options[(currentIndex + 1) % options.length];
-    await switchToCamera(nextCamera.id);
+    await switchCamera(cameraMode === "environment" ? "user" : "environment");
   }
 
   const resultStyle =
@@ -253,8 +219,8 @@ export default function ScanPage() {
         <p style={styles.eyebrow}>PIC 체크인</p>
         <h1 style={styles.title}>QR 연속 체크인</h1>
         <p style={styles.description}>
-          시작 버튼을 누르면 바로 카메라 권한 팝업이 뜹니다. iPad에서 카메라가
-          여러 개 잡히면 카메라를 선택하거나 전환할 수 있습니다.
+          기본은 후면 카메라입니다. iPad에서 전면 카메라가 켜지면 아래 카메라
+          선택에서 후면 카메라로 바꿔 주세요.
         </p>
 
         <label style={styles.label}>
@@ -277,23 +243,18 @@ export default function ScanPage() {
           </select>
         </label>
 
-        {cameras.length > 1 && (
-          <label style={styles.label}>
-            카메라
-            <select
-              value={selectedCameraId}
-              onChange={(event) => void switchToCamera(event.target.value)}
-              disabled={switchingCamera}
-              style={styles.input}
-            >
-              {cameras.map((camera) => (
-                <option key={camera.id} value={camera.id}>
-                  {camera.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        <label style={styles.label}>
+          카메라
+          <select
+            value={cameraMode}
+            onChange={(event) => void switchCamera(event.target.value as CameraMode)}
+            disabled={switchingCamera}
+            style={styles.input}
+          >
+            <option value="environment">{cameraLabels.environment}</option>
+            <option value="user">{cameraLabels.user}</option>
+          </select>
+        </label>
 
         {challengeError && <p style={styles.error}>{challengeError}</p>}
 
@@ -319,7 +280,7 @@ export default function ScanPage() {
               disabled={switchingCamera}
               style={styles.secondaryButton}
             >
-              {switchingCamera ? "카메라 전환 중..." : "다음 카메라로 전환"}
+              {switchingCamera ? "카메라 전환 중..." : "전면/후면 전환"}
             </button>
           </div>
         )}
@@ -328,13 +289,15 @@ export default function ScanPage() {
           <div id="qr-reader" style={styles.reader}>
             {!running && (
               <p style={styles.placeholder}>
-                연속 스캔 시작 버튼을 누르면 카메라가 켜집니다.
+                연속 스캔 시작 버튼을 누르면 {cameraLabels[cameraMode]}가 켜집니다.
               </p>
             )}
           </div>
           {running && (
             <p style={styles.status}>
-              {busy ? "체크인 처리 중..." : "다음 QR을 스캔할 준비가 됐습니다."}
+              {busy
+                ? "체크인 처리 중..."
+                : `${cameraLabels[cameraMode]}로 다음 QR을 스캔할 준비가 됐습니다.`}
             </p>
           )}
         </section>
