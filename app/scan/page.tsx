@@ -125,7 +125,7 @@ export default function ScanPage() {
         } catch {
           // The scanner may already be stopped by the user.
         }
-      }, 3000);
+      }, 2000);
     }
   }
 
