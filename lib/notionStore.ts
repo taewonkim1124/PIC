@@ -19,6 +19,7 @@ const memberProperties = {
   grade: "학년",
   active: "활동중",
   uniqueCode: "유니크 코드",
+  participationCount: "Participation Count",
 } as const;
 
 const challengeProperties = {
@@ -292,6 +293,41 @@ export async function findCheckin(
   return relationIds(page, challengeProperties.participants).includes(participantId);
 }
 
+async function countParticipationForParticipant(participantId: string) {
+  let cursor: string | undefined;
+  let count = 0;
+
+  do {
+    const response = await notion.dataSources.query({
+      data_source_id: challengesDataSourceId(),
+      page_size: 100,
+      start_cursor: cursor,
+      filter: {
+        property: challengeProperties.participants,
+        relation: { contains: participantId },
+      },
+    });
+
+    count += response.results.filter(isFullPage).length;
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+
+  return count;
+}
+
+async function updateMemberParticipationCount(participantId: string) {
+  const count = await countParticipationForParticipant(participantId);
+
+  await notion.pages.update({
+    page_id: participantId,
+    properties: {
+      [memberProperties.participationCount]: {
+        number: count,
+      },
+    },
+  });
+}
+
 export async function createCheckin(input: {
   participantId: string;
   challenge: string;
@@ -300,7 +336,7 @@ export async function createCheckin(input: {
   const page = await findChallengePage(input.challenge, input.date);
 
   if (!page) {
-    return notion.pages.create({
+    const createdPage = await notion.pages.create({
       parent: { data_source_id: challengesDataSourceId() },
       properties: {
         [challengeProperties.title]: {
@@ -317,6 +353,9 @@ export async function createCheckin(input: {
         },
       },
     });
+
+    await updateMemberParticipationCount(input.participantId);
+    return createdPage;
   }
 
   const participantIds = relationIds(page, challengeProperties.participants);
@@ -324,7 +363,7 @@ export async function createCheckin(input: {
     new Set([...participantIds, input.participantId]),
   );
 
-  return notion.pages.update({
+  const updatedPage = await notion.pages.update({
     page_id: page.id,
     properties: {
       [challengeProperties.participants]: {
@@ -335,6 +374,9 @@ export async function createCheckin(input: {
       },
     },
   });
+
+  await updateMemberParticipationCount(input.participantId);
+  return updatedPage;
 }
 
 export async function getChallengeNames() {
