@@ -1,5 +1,10 @@
 import fs from "node:fs";
 import { Client } from "@notionhq/client";
+import {
+  challengeProperties,
+  challengeRelationProperty,
+  checkinProperties,
+} from "./lib/checkin-migration-utils.mjs";
 
 function loadEnv() {
   const path = ".env.local";
@@ -65,7 +70,7 @@ async function main() {
     title: [{ text: { content: "Challenge Check-ins" } }],
     initial_data_source: {
       properties: {
-        "Check-in": { title: {} },
+        [checkinProperties.title]: { title: {} },
         Member: {
           relation: {
             data_source_id: membersDataSourceId,
@@ -73,16 +78,10 @@ async function main() {
             single_property: {},
           },
         },
-        Challenge: {
-          relation: {
-            data_source_id: challengesDataSourceId,
-            type: "single_property",
-            single_property: {},
-          },
-        },
-        "Check-in Date": { date: {} },
-        "Checked In At": { date: {} },
-        "Recorded By": { rich_text: {} },
+        [checkinProperties.challenge]: challengeRelationProperty(challengesDataSourceId),
+        [checkinProperties.checkinDate]: { date: {} },
+        [checkinProperties.checkedInAt]: { date: {} },
+        [checkinProperties.recordedBy]: { rich_text: {} },
         Status: {
           select: {
             options: [
@@ -91,7 +90,7 @@ async function main() {
             ],
           },
         },
-        Method: {
+        [checkinProperties.method]: {
           select: {
             options: [
               { name: "QR", color: "blue" },
@@ -99,7 +98,7 @@ async function main() {
             ],
           },
         },
-        "Check-in Key": { rich_text: {} },
+        [checkinProperties.checkinKey]: { rich_text: {} },
       },
     },
   });
@@ -107,18 +106,18 @@ async function main() {
   const dataSourceId =
     database.data_sources?.[0]?.id ?? database.id;
 
-  await notion.dataSources.update({
+  const challengesDataSource = await notion.dataSources.retrieve({
     data_source_id: challengesDataSourceId,
-    properties: {
-      "Check-ins": {
-        relation: {
-          data_source_id: dataSourceId,
-          type: "single_property",
-          single_property: {},
-        },
-      },
-    },
-  }).catch(() => undefined);
+  });
+
+  const reciprocalRelation =
+    challengesDataSource.properties[challengeProperties.checkins];
+
+  if (!reciprocalRelation || reciprocalRelation.type !== "relation") {
+    console.warn(
+      `Created the check-ins database, but ${challengeProperties.checkins} was not found on the Challenges data source. Run scripts/repair-challenge-checkins-relation.mjs before using rollups.`,
+    );
+  }
 
   upsertEnv("NOTION_CHALLENGE_CHECKINS_DATABASE_ID", database.id);
   upsertEnv("NOTION_CHALLENGE_CHECKINS_DATA_SOURCE_ID", dataSourceId);

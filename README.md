@@ -428,3 +428,59 @@ node scripts/hash-admin-password.mjs 사용할비밀번호
 - `.env.local`은 GitHub에 올리면 안 됩니다.
 - Notion 토큰과 Gmail 앱 비밀번호는 외부에 공유하면 안 됩니다.
 - Vercel 배포 시에도 같은 환경변수를 Vercel 프로젝트 설정에 등록해야 합니다.
+
+## Challenge Check-ins 구조와 migration
+
+현재 체크인은 `Challenge Check-ins` 데이터베이스에 한 명당 한 줄씩 저장합니다. 기존처럼 Challenges DB의 `참여명단` relation 배열을 직접 덮어쓰지 않습니다.
+
+올바른 relation 구조:
+
+| DB | 속성 | 연결 |
+| --- | --- | --- |
+| `Challenge Check-ins` | `Challenge` | Challenges DB로 연결 |
+| `Challenges` | `Check-ins` | `Challenge`의 반대편 양방향 relation |
+
+중요: 위 두 속성은 따로 만든 relation 두 개가 아니라 Notion의 같은 양방향 relation 쌍이어야 합니다. 그래야 체크인 페이지에서 `Challenge`를 지정하면 Challenges DB의 `Check-ins`에도 자동으로 보입니다.
+
+새 DB 생성:
+
+```bash
+node scripts/create-challenge-checkins-database.mjs
+```
+
+이미 relation을 잘못 만든 경우 먼저 dry-run으로 확인합니다.
+
+```bash
+node scripts/repair-challenge-checkins-relation.mjs
+```
+
+자동 복구를 시도할 때만 `--write`를 붙입니다.
+
+```bash
+node scripts/repair-challenge-checkins-relation.mjs --write
+```
+
+Notion에서 직접 만드는 Rollup:
+
+| 속성 | 설정 |
+| --- | --- |
+| `Participant Count` | Relation: `Check-ins`, Property: `Member`, Calculate: `Count unique values` |
+| `Participants` | Relation: `Check-ins`, Property: `Member`, Calculate: `Show unique values` |
+
+각 Challenge 페이지 안에서 체크인 명단을 보려면 `/linked view of database`로 `Challenge Check-ins` DB를 넣고, `Challenge contains 현재 페이지`, `Status is Valid` 필터를 추가한 뒤 `Checked In At` 오름차순으로 정렬합니다.
+
+기존 `참여명단` 데이터를 새 DB로 옮기기 전에는 dry-run을 먼저 실행합니다. 아무 옵션 없이 실행해도 dry-run입니다.
+
+```bash
+node scripts/migrate-legacy-challenge-checkins.mjs --dry-run
+```
+
+실제 생성은 아래 명령으로만 실행합니다.
+
+```bash
+node scripts/migrate-legacy-challenge-checkins.mjs --write
+```
+
+migration은 `참여명단` relation을 pagination해서 끝까지 읽고, 이미 존재하는 `Status = Valid`의 `Check-in Key`는 건너뜁니다. 기존 `참여명단` relation은 삭제하거나 비우지 않습니다.
+
+자세한 절차는 [Challenge Check-ins 전환 가이드](docs/challenge-checkins-migration.md)를 참고하세요.
