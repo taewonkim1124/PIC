@@ -454,6 +454,8 @@ node scripts/create-challenge-checkins-database.mjs
 node scripts/repair-challenge-checkins-relation.mjs
 ```
 
+이 검사는 단순히 relation이 존재하는지만 보지 않고, 양쪽 relation의 `synced_property_id`가 실제 상대 property ID와 서로 맞는지도 확인합니다.
+
 자동 복구를 시도할 때만 `--write`를 붙입니다.
 
 ```bash
@@ -482,5 +484,11 @@ node scripts/migrate-legacy-challenge-checkins.mjs --write
 ```
 
 migration은 `참여명단` relation을 pagination해서 끝까지 읽고, 이미 존재하는 `Status = Valid`의 `Check-in Key`는 건너뜁니다. 기존 `참여명단` relation은 삭제하거나 비우지 않습니다.
+
+기본 dry-run은 집계만 출력합니다. 세부 대상 목록까지 확인해야 할 때만 `--verbose`를 추가합니다.
+
+```bash
+node scripts/migrate-legacy-challenge-checkins.mjs --dry-run --verbose
+```
 
 자세한 절차는 [Challenge Check-ins 전환 가이드](docs/challenge-checkins-migration.md)를 참고하세요.

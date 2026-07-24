@@ -5,6 +5,7 @@ import {
   challengeRelationProperty,
   checkinProperties,
   checkinsRelationProperty,
+  isDualRelationPair,
 } from "./lib/checkin-migration-utils.mjs";
 
 const writeMode = process.argv.includes("--write") && !process.argv.includes("--dry-run");
@@ -38,26 +39,15 @@ function requireEnv(name) {
 function relationSummary(property) {
   if (!property || property.type !== "relation") return "missing or not relation";
 
-  const target = property.relation.data_source_id ?? "unknown target";
   const type = property.relation.type ?? "unknown type";
-  const syncedName =
-    property.relation.dual_property?.synced_property_name ??
-    property.relation.dual_property?.synced_property_id ??
-    "none";
-
-  return `${type}, target=${target}, synced=${syncedName}`;
-}
-
-function isDualRelationTo(property, targetDataSourceId, syncedPropertyName) {
-  if (!property || property.type !== "relation") return false;
-  if (property.relation.data_source_id !== targetDataSourceId) return false;
-  if (property.relation.type !== "dual_property") return false;
-
-  const synced = property.relation.dual_property;
-  return (
-    synced?.synced_property_name === syncedPropertyName ||
-    Boolean(synced?.synced_property_id)
+  const hasSyncedPropertyId = Boolean(
+    property.relation.dual_property?.synced_property_id,
   );
+  const syncedName = property.relation.dual_property?.synced_property_name;
+
+  return `${type}, target configured, synced property ${
+    hasSyncedPropertyId ? "id present" : syncedName ? `name=${syncedName}` : "missing"
+  }`;
 }
 
 async function tryUpdate(label, updateFn) {
@@ -81,29 +71,27 @@ async function main() {
     "NOTION_CHALLENGE_CHECKINS_DATA_SOURCE_ID",
   );
 
-  const [challengesDataSource, checkinsDataSource] = await Promise.all([
+  let [challengesDataSource, checkinsDataSource] = await Promise.all([
     notion.dataSources.retrieve({ data_source_id: challengesDataSourceId }),
     notion.dataSources.retrieve({ data_source_id: checkinsDataSourceId }),
   ]);
 
-  const challengeRelation = checkinsDataSource.properties[checkinProperties.challenge];
-  const checkinsRelation = challengesDataSource.properties[challengeProperties.checkins];
+  let challengeRelation = checkinsDataSource.properties[checkinProperties.challenge];
+  let checkinsRelation = challengesDataSource.properties[challengeProperties.checkins];
 
-  const challengeOk = isDualRelationTo(
-    challengeRelation,
-    challengesDataSourceId,
-    challengeProperties.checkins,
-  );
-  const checkinsOk = isDualRelationTo(
-    checkinsRelation,
-    checkinsDataSourceId,
-    checkinProperties.challenge,
-  );
+  const relationPairOk = isDualRelationPair({
+    sourceProperty: challengeRelation,
+    sourceTargetDataSourceId: challengesDataSourceId,
+    sourceSyncedPropertyId: checkinsRelation?.id,
+    targetProperty: checkinsRelation,
+    targetTargetDataSourceId: checkinsDataSourceId,
+    targetSyncedPropertyId: challengeRelation?.id,
+  });
 
   console.log(`Challenge Check-ins.${checkinProperties.challenge}: ${relationSummary(challengeRelation)}`);
   console.log(`Challenges.${challengeProperties.checkins}: ${relationSummary(checkinsRelation)}`);
 
-  if (challengeOk && checkinsOk) {
+  if (relationPairOk) {
     console.log("The relation already looks bidirectional.");
     return;
   }
@@ -116,35 +104,46 @@ async function main() {
     return;
   }
 
-  if (!challengeOk) {
+  if (!relationPairOk) {
     await tryUpdate(`Challenge Check-ins.${checkinProperties.challenge}`, () =>
       notion.dataSources.update({
         data_source_id: checkinsDataSourceId,
         properties: {
-          [checkinProperties.challenge]: challengeRelationProperty(challengesDataSourceId),
+          [checkinProperties.challenge]: challengeRelationProperty(
+            challengesDataSourceId,
+            checkinsRelation?.id,
+          ),
         },
       }),
     );
   }
 
-  const refreshedChallengesDataSource = await notion.dataSources.retrieve({
-    data_source_id: challengesDataSourceId,
-  });
-  const refreshedCheckinsRelation =
-    refreshedChallengesDataSource.properties[challengeProperties.checkins];
+  [challengesDataSource, checkinsDataSource] = await Promise.all([
+    notion.dataSources.retrieve({ data_source_id: challengesDataSourceId }),
+    notion.dataSources.retrieve({ data_source_id: checkinsDataSourceId }),
+  ]);
+
+  challengeRelation = checkinsDataSource.properties[checkinProperties.challenge];
+  checkinsRelation = challengesDataSource.properties[challengeProperties.checkins];
 
   if (
-    !isDualRelationTo(
-      refreshedCheckinsRelation,
-      checkinsDataSourceId,
-      checkinProperties.challenge,
-    )
+    !isDualRelationPair({
+      sourceProperty: challengeRelation,
+      sourceTargetDataSourceId: challengesDataSourceId,
+      sourceSyncedPropertyId: checkinsRelation?.id,
+      targetProperty: checkinsRelation,
+      targetTargetDataSourceId: checkinsDataSourceId,
+      targetSyncedPropertyId: challengeRelation?.id,
+    })
   ) {
     await tryUpdate(`Challenges.${challengeProperties.checkins}`, () =>
       notion.dataSources.update({
         data_source_id: challengesDataSourceId,
         properties: {
-          [challengeProperties.checkins]: checkinsRelationProperty(checkinsDataSourceId),
+          [challengeProperties.checkins]: checkinsRelationProperty(
+            checkinsDataSourceId,
+            challengeRelation?.id,
+          ),
         },
       }),
     );

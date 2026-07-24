@@ -131,6 +131,13 @@ node scripts/repair-challenge-checkins-relation.mjs --write
 
 이 스크립트는 기존 페이지나 relation 값을 삭제하지 않습니다. Notion API가 기존 single relation을 dual relation으로 바꾸는 것을 거부하면, 스크립트가 실패 원인을 출력합니다.
 
+정상 판정 기준:
+
+1. `Challenge Check-ins.Challenge`가 Challenges DB를 가리킵니다.
+2. `Challenges.Check-ins`가 Challenge Check-ins DB를 가리킵니다.
+3. 두 relation이 모두 `dual_property`입니다.
+4. 양쪽의 `synced_property_id`가 실제 상대 property ID와 서로 일치합니다.
+
 자동 복구가 실패하면 Notion UI에서 직접 확인합니다.
 
 1. `Challenge Check-ins` DB를 엽니다.
@@ -172,6 +179,12 @@ migration 동작:
 6. 같은 migration을 다시 실행해도 같은 `Check-in Key`는 건너뜁니다.
 7. 기존 `참여명단` relation은 삭제하거나 비우지 않습니다.
 
+기본 dry-run 출력은 운영 page ID나 `Check-in Key`를 나열하지 않고 집계만 보여줍니다. 세부 대상 목록까지 확인해야 할 때만 `--verbose`를 추가합니다.
+
+```bash
+node scripts/migrate-legacy-challenge-checkins.mjs --dry-run --verbose
+```
+
 ## 필요한 환경변수
 
 ```env
@@ -196,5 +209,5 @@ NOTION_CHALLENGE_CHECKINS_DATA_SOURCE_ID=
 ## 제한
 
 - Notion API가 이미 만들어진 단방향 relation을 양방향 relation으로 직접 변환하지 못할 수 있습니다.
-- legacy migration의 `Checked In At`은 과거 실제 스캔 시간이 없으므로 해당 날짜 정오 시간으로 저장합니다.
+- legacy migration의 `Checked In At`은 과거 실제 스캔 시간이 없으므로 해당 날짜의 New York 정오 시간으로 저장합니다. 여름에는 `-04:00`, 겨울에는 `-05:00` offset을 사용합니다.
 - 중복 정책은 `Status = Valid`만 막습니다. `Cancelled` 기록만 있으면 다시 체크인할 수 있습니다.

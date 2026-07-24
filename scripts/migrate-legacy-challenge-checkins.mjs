@@ -7,6 +7,7 @@ import {
 
 const writeMode = process.argv.includes("--write") && !process.argv.includes("--dry-run");
 const dryRunMode = !writeMode;
+const verboseMode = process.argv.includes("--verbose");
 const timeZone = "America/New_York";
 
 function loadEnv() {
@@ -51,11 +52,15 @@ async function main() {
   });
 
   console.log(
-    `${dryRunMode ? "Dry run" : "Write mode"}: ${plan.creates.length} check-ins queued, ${plan.skipped} existing valid check-ins skipped, ${plan.missingDate} challenges skipped because Date is empty.`,
+    `${dryRunMode ? "Dry run" : "Write mode"}: ${plan.challengeCount} challenges scanned, ${plan.totalRelationMemberCount} legacy relation members read, ${plan.creates.length} check-ins queued, ${plan.skipped} existing valid check-ins skipped, ${plan.missingDate} challenges skipped because Date is empty, ${plan.missingRelation} challenges missing legacy relation, ${plan.relationReadErrors} relation read errors.`,
   );
 
   for (const item of plan.creates) {
-    console.log(`${writeMode ? "CREATE" : "DRY RUN"} ${item.key}`);
+    if (verboseMode) {
+      console.log(
+        `${writeMode ? "CREATE" : "DRY RUN"} ${item.challengeName} ${item.checkinDate}`,
+      );
+    }
 
     if (!writeMode) continue;
 
@@ -66,7 +71,7 @@ async function main() {
   }
 
   console.log(
-    `${writeMode ? "Created" : "Would create"} ${plan.creates.length} check-ins. Skipped ${plan.skipped} existing valid check-ins. ${plan.missingDate} challenges had no date. Scanned ${plan.challengeCount} challenges. Time zone basis: ${timeZone}.`,
+    `${writeMode ? "Created" : "Would create"} ${plan.creates.length} check-ins. Skipped ${plan.skipped} existing valid check-ins. ${plan.missingDate} challenges had no date. ${plan.missingRelation} challenges had no legacy relation. ${plan.relationReadErrors} relation reads failed. Scanned ${plan.challengeCount} challenges. Time zone basis: ${timeZone}.`,
   );
 }
 

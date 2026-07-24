@@ -7,7 +7,11 @@ import {
   checkinsRelationProperty,
   collectPaginatedQuery,
   collectRelationPropertyIds,
+  isDualRelationPair,
+  legacyCheckinPageProperties,
+  legacyParticipantsProperty,
   planLegacyChallengeMigration,
+  zonedDateTimeIso,
 } from "../scripts/lib/checkin-migration-utils.mjs";
 
 function page(id, properties) {
@@ -42,6 +46,18 @@ function relationProperty(id, ids = []) {
   };
 }
 
+function dataSourceRelationProperty(id, dataSourceId, syncedPropertyId) {
+  return {
+    id,
+    type: "relation",
+    relation: {
+      data_source_id: dataSourceId,
+      type: "dual_property",
+      dual_property: { synced_property_id: syncedPropertyId },
+    },
+  };
+}
+
 function richTextProperty(id, text) {
   return {
     id,
@@ -73,6 +89,54 @@ describe("check-in migration utilities", () => {
         },
       },
     });
+  });
+
+  it("requires dual relation synced property ids to point at each other", () => {
+    const challenge = dataSourceRelationProperty(
+      "challenge-prop",
+      "challenges-ds",
+      "checkins-prop",
+    );
+    const checkins = dataSourceRelationProperty(
+      "checkins-prop",
+      "checkins-ds",
+      "challenge-prop",
+    );
+
+    assert.equal(
+      isDualRelationPair({
+        sourceProperty: challenge,
+        sourceTargetDataSourceId: "challenges-ds",
+        sourceSyncedPropertyId: checkins.id,
+        targetProperty: checkins,
+        targetTargetDataSourceId: "checkins-ds",
+        targetSyncedPropertyId: challenge.id,
+      }),
+      true,
+    );
+
+    assert.equal(
+      isDualRelationPair({
+        sourceProperty: {
+          ...challenge,
+          relation: {
+            ...challenge.relation,
+            dual_property: { synced_property_id: "wrong-prop" },
+          },
+        },
+        sourceTargetDataSourceId: "challenges-ds",
+        sourceSyncedPropertyId: checkins.id,
+        targetProperty: checkins,
+        targetTargetDataSourceId: "checkins-ds",
+        targetSyncedPropertyId: challenge.id,
+      }),
+      false,
+    );
+  });
+
+  it("uses America/New_York DST offsets for legacy timestamps", () => {
+    assert.equal(zonedDateTimeIso("2026-07-24"), "2026-07-24T12:00:00-04:00");
+    assert.equal(zonedDateTimeIso("2026-01-24"), "2026-01-24T12:00:00-05:00");
   });
 
   it("follows data source pagination until the cursor ends", async () => {
@@ -130,7 +194,7 @@ describe("check-in migration utilities", () => {
     const challengePage = page("challenge-1", {
       "Challenge Name": titleProperty("title-id", "QR 자동 테스트"),
       Date: dateProperty("date-id", date),
-      참여명단: relationProperty("participants-prop"),
+      [legacyParticipantsProperty]: relationProperty("participants-prop"),
     });
     const relationIds = [
       "member-0",
@@ -175,7 +239,10 @@ describe("check-in migration utilities", () => {
 
     assert.equal(queryCount, 2);
     assert.equal(plan.skipped, 1);
+    assert.equal(plan.totalRelationMemberCount, 103);
     assert.equal(plan.creates.length, 102);
+    assert.equal(plan.missingRelation, 0);
+    assert.equal(plan.relationReadErrors, 0);
     assert.equal(new Set(plan.creates.map((item) => item.key)).size, 102);
     assert.ok(!plan.creates.some((item) => item.key === existingKey));
   });
@@ -185,7 +252,7 @@ describe("check-in migration utilities", () => {
     const challengePage = page("challenge-1", {
       "Challenge Name": titleProperty("title-id", "QR 자동 테스트"),
       Date: dateProperty("date-id", date),
-      참여명단: relationProperty("participants-prop", ["member-1"]),
+      [legacyParticipantsProperty]: relationProperty("participants-prop", ["member-1"]),
     });
     const notion = {
       dataSources: {
@@ -216,5 +283,20 @@ describe("check-in migration utilities", () => {
 
     assert.equal(plan.skipped, 0);
     assert.equal(plan.creates.length, 1);
+  });
+
+  it("stores legacy winter check-ins with the New York standard-time offset", () => {
+    const properties = legacyCheckinPageProperties({
+      key: "member:challenge:2026-01-24",
+      memberId: "member",
+      challengeId: "challenge",
+      challengeName: "Winter Challenge",
+      checkinDate: "2026-01-24",
+    });
+
+    assert.equal(
+      properties["Checked In At"].date.start,
+      "2026-01-24T12:00:00-05:00",
+    );
   });
 });

@@ -18,28 +18,66 @@ export const challengeProperties = {
   checkins: "Check-ins",
 };
 
-export function challengeRelationProperty(challengesDataSourceId) {
+export function challengeRelationProperty(
+  challengesDataSourceId,
+  syncedPropertyId,
+) {
   return {
     relation: {
       data_source_id: challengesDataSourceId,
       type: "dual_property",
-      dual_property: {
-        synced_property_name: challengeProperties.checkins,
-      },
+      dual_property: syncedPropertyId
+        ? { synced_property_id: syncedPropertyId }
+        : { synced_property_name: challengeProperties.checkins },
     },
   };
 }
 
-export function checkinsRelationProperty(checkinsDataSourceId) {
+export function checkinsRelationProperty(
+  checkinsDataSourceId,
+  syncedPropertyId,
+) {
   return {
     relation: {
       data_source_id: checkinsDataSourceId,
       type: "dual_property",
-      dual_property: {
-        synced_property_name: checkinProperties.challenge,
-      },
+      dual_property: syncedPropertyId
+        ? { synced_property_id: syncedPropertyId }
+        : { synced_property_name: checkinProperties.challenge },
     },
   };
+}
+
+function normalizePropertyId(id) {
+  if (!id) return "";
+
+  try {
+    return decodeURIComponent(id);
+  } catch {
+    return id;
+  }
+}
+
+export function isDualRelationPair({
+  sourceProperty,
+  sourceTargetDataSourceId,
+  sourceSyncedPropertyId,
+  targetProperty,
+  targetTargetDataSourceId,
+  targetSyncedPropertyId,
+}) {
+  return (
+    sourceProperty?.type === "relation" &&
+    targetProperty?.type === "relation" &&
+    sourceProperty.relation.data_source_id === sourceTargetDataSourceId &&
+    targetProperty.relation.data_source_id === targetTargetDataSourceId &&
+    sourceProperty.relation.type === "dual_property" &&
+    targetProperty.relation.type === "dual_property" &&
+    normalizePropertyId(sourceProperty.relation.dual_property?.synced_property_id) ===
+      normalizePropertyId(sourceSyncedPropertyId) &&
+    normalizePropertyId(targetProperty.relation.dual_property?.synced_property_id) ===
+      normalizePropertyId(targetSyncedPropertyId)
+  );
 }
 
 export function isFullPage(page) {
@@ -74,6 +112,66 @@ export function relationIdsFromPageSnapshot(page, property) {
 
 export function checkinKey(memberId, challengeId, checkinDate) {
   return `${memberId}:${challengeId}:${checkinDate}`;
+}
+
+function dateTimePartsInZone(date, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(date);
+
+  return Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+}
+
+function formatOffset(minutes) {
+  const sign = minutes >= 0 ? "+" : "-";
+  const absolute = Math.abs(minutes);
+  const hours = String(Math.floor(absolute / 60)).padStart(2, "0");
+  const mins = String(absolute % 60).padStart(2, "0");
+
+  return `${sign}${hours}:${mins}`;
+}
+
+export function zonedDateTimeIso(
+  date,
+  { timeZone = "America/New_York", hour = 12 } = {},
+) {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) {
+    throw new Error(`Invalid date: ${date}`);
+  }
+
+  const desiredUtc = Date.UTC(year, month - 1, day, hour, 0, 0);
+  let instant = new Date(desiredUtc);
+
+  for (let i = 0; i < 3; i += 1) {
+    const parts = dateTimePartsInZone(instant, timeZone);
+    const actualUtc = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+    );
+    instant = new Date(instant.getTime() + desiredUtc - actualUtc);
+  }
+
+  const offsetMinutes = Math.round((desiredUtc - instant.getTime()) / 60000);
+
+  return `${date}T${String(hour).padStart(2, "0")}:00:00${formatOffset(
+    offsetMinutes,
+  )}`;
 }
 
 export async function collectPaginatedQuery(queryFn, baseArgs) {
@@ -174,6 +272,9 @@ export async function planLegacyChallengeMigration({
   const creates = [];
   let skipped = 0;
   let missingDate = 0;
+  let missingRelation = 0;
+  let relationReadErrors = 0;
+  let totalRelationMemberCount = 0;
 
   for (const challenge of challenges.filter(isFullPage)) {
     const challengeName = title(challenge, challengeProperties.title) || "Challenge";
@@ -185,16 +286,30 @@ export async function planLegacyChallengeMigration({
       continue;
     }
 
+    if (!relationProperty || relationProperty.type !== "relation") {
+      missingRelation += 1;
+      continue;
+    }
+
     const fallbackIds = relationIdsFromPageSnapshot(
       challenge,
       legacyParticipantsProperty,
     );
-    const memberIds = await collectRelationPropertyIds(
-      notion,
-      challenge.id,
-      relationProperty?.id,
-      fallbackIds,
-    );
+    let memberIds;
+
+    try {
+      memberIds = await collectRelationPropertyIds(
+        notion,
+        challenge.id,
+        relationProperty.id,
+        fallbackIds,
+      );
+    } catch {
+      relationReadErrors += 1;
+      continue;
+    }
+
+    totalRelationMemberCount += memberIds.length;
 
     for (const memberId of memberIds) {
       const key = checkinKey(memberId, challenge.id, date);
@@ -218,6 +333,9 @@ export async function planLegacyChallengeMigration({
     creates,
     skipped,
     missingDate,
+    missingRelation,
+    relationReadErrors,
+    totalRelationMemberCount,
     challengeCount: challenges.filter(isFullPage).length,
   };
 }
@@ -237,7 +355,7 @@ export function legacyCheckinPageProperties(planItem) {
     [checkinProperties.challenge]: { relation: [{ id: planItem.challengeId }] },
     [checkinProperties.checkinDate]: { date: { start: planItem.checkinDate } },
     [checkinProperties.checkedInAt]: {
-      date: { start: `${planItem.checkinDate}T12:00:00-04:00` },
+      date: { start: zonedDateTimeIso(planItem.checkinDate) },
     },
     [checkinProperties.recordedBy]: {
       rich_text: [{ text: { content: "Legacy Migration" } }],
