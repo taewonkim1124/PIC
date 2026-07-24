@@ -324,6 +324,12 @@ ADMIN_USERS=[{"username":"taewon","password":"change-this-password","name":"김�
 | `Active` | Checkbox |
 | `활동중` | Select 또는 Status |
 
+비밀번호 입력 방법:
+
+- 간단하게 쓰려면 회장이 정한 임시 비밀번호를 `Password Hash` 칸에 그대로 넣어도 됩니다.
+- 운영진이 첫 로그인에 성공하면 앱이 그 값을 자동으로 해시값으로 바꿔 저장합니다.
+- 처음부터 해시값으로 넣고 싶으면 아래 명령을 사용합니다.
+
 비밀번호 해시 생성:
 
 ```bash
@@ -335,8 +341,8 @@ node scripts/hash-admin-password.mjs 사용할비밀번호
 관리자 계정 추가 순서:
 
 1. 회장이 임시 비밀번호를 정합니다.
-2. `node scripts/hash-admin-password.mjs 임시비밀번호`로 해시를 만듭니다.
-3. Notion Admins DB에 `Name`, `Username`, `Password Hash`, `Active`를 직접 입력합니다.
+2. Notion Admins DB에 `Name`, `Username`, `Password Hash`, `Active`를 직접 입력합니다.
+3. `Password Hash`에는 임시 비밀번호를 그대로 넣거나, 해시 생성 명령으로 만든 값을 넣습니다.
 4. 운영진에게 `Username`과 임시 비밀번호를 전달합니다.
 5. 운영진은 로그인 후 `/account/password`에서 본인 비밀번호로 변경합니다.
 

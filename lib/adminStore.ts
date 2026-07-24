@@ -93,6 +93,21 @@ function safeCompare(a: string, b: string) {
   return aBuffer.length === bBuffer.length && timingSafeEqual(aBuffer, bBuffer);
 }
 
+function isPasswordHash(value: string) {
+  return /^[a-f0-9]{64}$/i.test(value);
+}
+
+async function updatePasswordHash(pageId: string, password: string) {
+  await notion.pages.update({
+    page_id: pageId,
+    properties: {
+      [adminProperties.passwordHash]: {
+        rich_text: [{ text: { content: passwordHash(password) } }],
+      },
+    },
+  });
+}
+
 function adminFromPage(page: PageObjectResponse): NotionAdminUser | null {
   const displayName = title(page, adminProperties.title).trim();
   const username = richText(page, adminProperties.username).trim().toLowerCase();
@@ -138,7 +153,15 @@ export async function findNotionAdminLogin(username: string, password: string) {
   if (!admin || !admin.active) return null;
 
   const attemptedHash = passwordHash(password);
-  if (!safeCompare(admin.passwordHash, attemptedHash)) return null;
+  const passwordMatches = isPasswordHash(admin.passwordHash)
+    ? safeCompare(admin.passwordHash, attemptedHash)
+    : safeCompare(admin.passwordHash, password);
+
+  if (!passwordMatches) return null;
+
+  if (!isPasswordHash(admin.passwordHash)) {
+    await updatePasswordHash(admin.id, password);
+  }
 
   return {
     role: "admin" as const,
@@ -167,12 +190,5 @@ export async function changeAdminPassword(input: {
     throw new Error("Current password is incorrect.");
   }
 
-  await notion.pages.update({
-    page_id: admin.id,
-    properties: {
-      [adminProperties.passwordHash]: {
-        rich_text: [{ text: { content: passwordHash(input.nextPassword) } }],
-      },
-    },
-  });
+  await updatePasswordHash(admin.id, input.nextPassword);
 }
