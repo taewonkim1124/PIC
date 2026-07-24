@@ -29,6 +29,17 @@ const challengeProperties = {
   participantCount: "Participant Count",
 } as const;
 
+const checkinProperties = {
+  title: "Name",
+  member: "Member",
+  challenge: "Challenge",
+  date: "Date",
+  checkedInAt: "Checked In At",
+  checkedInBy: "Checked In By",
+  status: "Status",
+  method: "Method",
+} as const;
+
 const paymentProperties = {
   title: "Name",
   uniqueCode: "Code",
@@ -52,6 +63,10 @@ function membersDataSourceId() {
 
 function challengesDataSourceId() {
   return requiredEnv("NOTION_CHECKINS_DATA_SOURCE_ID");
+}
+
+function challengeCheckinsDataSourceId() {
+  return requiredEnv("NOTION_CHALLENGE_CHECKINS_DATA_SOURCE_ID");
 }
 
 function paymentsDataSourceId() {
@@ -94,6 +109,27 @@ function relationIds(page: PageObjectResponse, property: string) {
   return value?.type === "relation"
     ? value.relation.map((item) => item.id)
     : [];
+}
+
+function dateStart(page: PageObjectResponse, property: string) {
+  const value = page.properties[property];
+  return value?.type === "date" ? value.date?.start ?? "" : "";
+}
+
+function propertyText(page: PageObjectResponse, property: string) {
+  const value = page.properties[property];
+  if (!value) return "";
+
+  if (value.type === "select") return value.select?.name ?? "";
+  if (value.type === "status") return value.status?.name ?? "";
+  if (value.type === "rich_text") {
+    return value.rich_text.map((item) => item.plain_text).join("");
+  }
+  if (value.type === "title") {
+    return value.title.map((item) => item.plain_text).join("");
+  }
+
+  return "";
 }
 
 function optionalRichText(value: string | null | undefined) {
@@ -290,15 +326,58 @@ async function findChallengePage(challenge: string, date: string) {
   return response.results[0] ? requireFullPage(response.results[0]) : null;
 }
 
+async function ensureChallengePage(challenge: string, date: string) {
+  const page = await findChallengePage(challenge, date);
+  if (page) return page;
+
+  return requireFullPage(
+    await notion.pages.create({
+      parent: { data_source_id: challengesDataSourceId() },
+      properties: {
+        [challengeProperties.title]: {
+          title: [{ text: { content: challenge } }],
+        },
+        [challengeProperties.date]: {
+          date: { start: date },
+        },
+        [challengeProperties.participantCount]: {
+          number: 0,
+        },
+      },
+    }),
+  );
+}
+
 export async function findCheckin(
   participantId: string,
   challenge: string,
   date: string,
 ) {
-  const page = await findChallengePage(challenge, date);
-  if (!page) return false;
+  const challengePage = await findChallengePage(challenge, date);
+  if (!challengePage) return false;
 
-  return relationIds(page, challengeProperties.participants).includes(participantId);
+  const response = await notion.dataSources.query({
+    data_source_id: challengeCheckinsDataSourceId(),
+    page_size: 1,
+    filter: {
+      and: [
+        {
+          property: checkinProperties.member,
+          relation: { contains: participantId },
+        },
+        {
+          property: checkinProperties.challenge,
+          relation: { contains: challengePage.id },
+        },
+        {
+          property: checkinProperties.date,
+          date: { equals: date },
+        },
+      ],
+    },
+  });
+
+  return response.results.some(isFullPage);
 }
 
 async function countParticipationForParticipant(participantId: string) {
@@ -307,12 +386,42 @@ async function countParticipationForParticipant(participantId: string) {
 
   do {
     const response = await notion.dataSources.query({
-      data_source_id: challengesDataSourceId(),
+      data_source_id: challengeCheckinsDataSourceId(),
       page_size: 100,
       start_cursor: cursor,
       filter: {
-        property: challengeProperties.participants,
+        property: checkinProperties.member,
         relation: { contains: participantId },
+      },
+    });
+
+    count += response.results.filter(isFullPage).length;
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+
+  return count;
+}
+
+async function countCheckinsForChallenge(challengePageId: string, date: string) {
+  let cursor: string | undefined;
+  let count = 0;
+
+  do {
+    const response = await notion.dataSources.query({
+      data_source_id: challengeCheckinsDataSourceId(),
+      page_size: 100,
+      start_cursor: cursor,
+      filter: {
+        and: [
+          {
+            property: checkinProperties.challenge,
+            relation: { contains: challengePageId },
+          },
+          {
+            property: checkinProperties.date,
+            date: { equals: date },
+          },
+        ],
       },
     });
 
@@ -339,68 +448,76 @@ async function updateMemberParticipationCount(
   });
 }
 
+async function updateChallengeParticipantCount(challengePageId: string, date: string) {
+  const count = await countCheckinsForChallenge(challengePageId, date);
+
+  await notion.pages.update({
+    page_id: challengePageId,
+    properties: {
+      [challengeProperties.participantCount]: {
+        number: count,
+      },
+    },
+  });
+}
+
 export async function createCheckin(input: {
   participantId: string;
+  participantName: string;
   challenge: string;
   date: string;
+  checkedInBy: string;
   currentParticipationCount?: number | null;
 }) {
-  const page = await findChallengePage(input.challenge, input.date);
-  const nextMemberParticipationCount =
-    (input.currentParticipationCount ??
-      (await countParticipationForParticipant(input.participantId))) + 1;
+  const challengePage = await ensureChallengePage(input.challenge, input.date);
 
-  if (!page) {
-    await notion.pages.create({
-      parent: { data_source_id: challengesDataSourceId() },
-      properties: {
-        [challengeProperties.title]: {
-          title: [{ text: { content: input.challenge } }],
-        },
-        [challengeProperties.date]: {
-          date: { start: input.date },
-        },
-        [challengeProperties.participants]: {
-          relation: [{ id: input.participantId }],
-        },
-        [challengeProperties.participantCount]: {
-          number: 1,
-        },
-      },
-    });
-
-    await updateMemberParticipationCount(
-      input.participantId,
-      nextMemberParticipationCount,
-    );
-    return { alreadyCheckedIn: false };
-  }
-
-  const participantIds = relationIds(page, challengeProperties.participants);
-  if (participantIds.includes(input.participantId)) {
+  if (await findCheckin(input.participantId, input.challenge, input.date)) {
     return { alreadyCheckedIn: true };
   }
 
-  const nextParticipantIds = Array.from(
-    new Set([...participantIds, input.participantId]),
-  );
+  const checkedInAt = new Date().toISOString();
 
-  await notion.pages.update({
-    page_id: page.id,
+  await notion.pages.create({
+    parent: { data_source_id: challengeCheckinsDataSourceId() },
     properties: {
-      [challengeProperties.participants]: {
-        relation: nextParticipantIds.map((id) => ({ id })),
+      [checkinProperties.title]: {
+        title: [
+          {
+            text: {
+              content: `${input.challenge} - ${input.participantName} - ${input.date}`,
+            },
+          },
+        ],
       },
-      [challengeProperties.participantCount]: {
-        number: nextParticipantIds.length,
+      [checkinProperties.member]: {
+        relation: [{ id: input.participantId }],
+      },
+      [checkinProperties.challenge]: {
+        relation: [{ id: challengePage.id }],
+      },
+      [checkinProperties.date]: {
+        date: { start: input.date },
+      },
+      [checkinProperties.checkedInAt]: {
+        date: { start: checkedInAt },
+      },
+      [checkinProperties.checkedInBy]: {
+        rich_text: [{ text: { content: input.checkedInBy } }],
+      },
+      [checkinProperties.status]: {
+        select: { name: "Checked In" },
+      },
+      [checkinProperties.method]: {
+        select: { name: "QR" },
       },
     },
   });
 
-  await updateMemberParticipationCount(
-    input.participantId,
-    nextMemberParticipationCount,
-  );
+  await Promise.all([
+    updateMemberParticipationCount(input.participantId),
+    updateChallengeParticipantCount(challengePage.id, input.date),
+  ]);
+
   return { alreadyCheckedIn: false };
 }
 
@@ -428,25 +545,59 @@ export async function getChallengeNames() {
 }
 
 export async function getCheckins(challenge: string, date: string) {
-  const page = await findChallengePage(challenge, date);
-  if (!page) return [];
+  const challengePage = await findChallengePage(challenge, date);
+  if (!challengePage) return [];
 
-  const participantIds = relationIds(page, challengeProperties.participants);
-  const participants = await Promise.all(
-    participantIds.map(async (id) =>
-      requireFullPage(await notion.pages.retrieve({ page_id: id })),
-    ),
+  const checkins = [];
+  let cursor: string | undefined;
+
+  do {
+    const response = await notion.dataSources.query({
+      data_source_id: challengeCheckinsDataSourceId(),
+      page_size: 100,
+      start_cursor: cursor,
+      filter: {
+        and: [
+          {
+            property: checkinProperties.challenge,
+            relation: { contains: challengePage.id },
+          },
+          {
+            property: checkinProperties.date,
+            date: { equals: date },
+          },
+        ],
+      },
+      sorts: [{ property: checkinProperties.checkedInAt, direction: "ascending" }],
+    });
+
+    checkins.push(...response.results.filter(isFullPage));
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+
+  return Promise.all(
+    checkins.map(async (checkin) => {
+      const memberId = relationIds(checkin, checkinProperties.member)[0];
+      const participant = memberId
+        ? requireFullPage(await notion.pages.retrieve({ page_id: memberId }))
+        : null;
+
+      return {
+        id: checkin.id,
+        checked_in_at:
+          dateStart(checkin, checkinProperties.checkedInAt) ||
+          checkin.created_time,
+        method: propertyText(checkin, checkinProperties.method) || "QR",
+        checked_in_by: richText(checkin, checkinProperties.checkedInBy),
+        participants: participant
+          ? {
+              name: title(participant, memberProperties.title),
+              email: email(participant, memberProperties.email),
+            }
+          : null,
+      };
+    }),
   );
-
-  return participants.map((participant) => ({
-    id: participant.id,
-    checked_in_at: page.last_edited_time,
-    method: "qr",
-    participants: {
-      name: title(participant, memberProperties.title),
-      email: email(participant, memberProperties.email),
-    },
-  }));
 }
 
 export async function createPayment(input: {

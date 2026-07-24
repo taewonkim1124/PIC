@@ -29,16 +29,21 @@ async function main() {
   loadEnv();
 
   const dataSourceId = process.env.NOTION_CHECKINS_DATA_SOURCE_ID;
+  const challengeCheckinsDataSourceId =
+    process.env.NOTION_CHALLENGE_CHECKINS_DATA_SOURCE_ID;
   if (!process.env.NOTION_TOKEN) {
     throw new Error("NOTION_TOKEN is not configured.");
   }
   if (!dataSourceId) {
     throw new Error("NOTION_CHECKINS_DATA_SOURCE_ID is not configured.");
   }
+  if (!challengeCheckinsDataSourceId) {
+    throw new Error("NOTION_CHALLENGE_CHECKINS_DATA_SOURCE_ID is not configured.");
+  }
 
   const notion = new Client({ auth: process.env.NOTION_TOKEN });
   const participantCountProperty = "Participant Count";
-  const participantsProperty = "참여명단";
+  const challengeProperty = "Challenge";
 
   const dataSource = await notion.dataSources.retrieve({
     data_source_id: dataSourceId,
@@ -69,8 +74,23 @@ async function main() {
     });
 
     for (const page of response.results.filter(isFullPage)) {
-      const relation = page.properties[participantsProperty];
-      const count = relation?.type === "relation" ? relation.relation.length : 0;
+      let checkinCursor;
+      let count = 0;
+
+      do {
+        const checkins = await notion.dataSources.query({
+          data_source_id: challengeCheckinsDataSourceId,
+          page_size: 100,
+          start_cursor: checkinCursor,
+          filter: {
+            property: challengeProperty,
+            relation: { contains: page.id },
+          },
+        });
+
+        count += checkins.results.filter(isFullPage).length;
+        checkinCursor = checkins.next_cursor ?? undefined;
+      } while (checkinCursor);
 
       await notion.pages.update({
         page_id: page.id,

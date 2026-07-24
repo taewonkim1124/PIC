@@ -47,20 +47,21 @@ async function main() {
   loadEnv();
 
   const membersDataSourceId = process.env.NOTION_MEMBERS_DATA_SOURCE_ID;
-  const challengesDataSourceId = process.env.NOTION_CHECKINS_DATA_SOURCE_ID;
+  const challengeCheckinsDataSourceId =
+    process.env.NOTION_CHALLENGE_CHECKINS_DATA_SOURCE_ID;
   if (!process.env.NOTION_TOKEN) {
     throw new Error("NOTION_TOKEN is not configured.");
   }
   if (!membersDataSourceId) {
     throw new Error("NOTION_MEMBERS_DATA_SOURCE_ID is not configured.");
   }
-  if (!challengesDataSourceId) {
-    throw new Error("NOTION_CHECKINS_DATA_SOURCE_ID is not configured.");
+  if (!challengeCheckinsDataSourceId) {
+    throw new Error("NOTION_CHALLENGE_CHECKINS_DATA_SOURCE_ID is not configured.");
   }
 
   const notion = new Client({ auth: process.env.NOTION_TOKEN });
   const participationCountProperty = "Participation Count";
-  const participantsProperty = "참여명단";
+  const memberProperty = "Member";
 
   const membersDataSource = await notion.dataSources.retrieve({
     data_source_id: membersDataSourceId,
@@ -80,19 +81,19 @@ async function main() {
     console.log(`${participationCountProperty} already exists.`);
   }
 
-  const [members, challenges] = await Promise.all([
+  const [members, checkins] = await Promise.all([
     collectPages(notion, membersDataSourceId),
-    collectPages(notion, challengesDataSourceId),
+    collectPages(notion, challengeCheckinsDataSourceId),
   ]);
 
   const counts = new Map(members.map((member) => [member.id, 0]));
 
-  for (const challenge of challenges) {
-    const relation = challenge.properties[participantsProperty];
+  for (const checkin of checkins) {
+    const relation = checkin.properties[memberProperty];
     if (relation?.type !== "relation") continue;
 
-    for (const participant of relation.relation) {
-      counts.set(participant.id, (counts.get(participant.id) ?? 0) + 1);
+    for (const member of relation.relation) {
+      counts.set(member.id, (counts.get(member.id) ?? 0) + 1);
     }
   }
 

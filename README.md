@@ -140,7 +140,7 @@ GMAIL_APP_PASSWORD=google-app-password
 
 중복 체크인 방지:
 
-같은 멤버가 같은 날짜에 같은 챌린지로 이미 체크인했다면 다시 저장되지 않습니다.
+같은 멤버가 같은 날짜에 같은 챌린지로 이미 체크인했다면 다시 저장되지 않습니다. 체크인은 `Challenge Check-ins` DB에 한 명당 한 줄씩 저장됩니다.
 
 ### 참여명단
 
@@ -225,8 +225,42 @@ GMAIL_APP_PASSWORD=google-app-password
 | `Challenge Name` | Title |
 | `Date` | Date |
 | `참여명단` | Relation |
+| `Participant Count` | Number |
+| `Check-ins` | Relation |
 
-`참여명단`은 Member 데이터베이스와 연결되어 있어야 합니다.
+`참여명단`은 기존 화면 호환용으로 남겨둘 수 있습니다. 실제 체크인 기록은 아래 `Challenge Check-ins` 데이터베이스가 기준입니다.
+
+### Challenge Check-ins 데이터베이스
+
+QR 스캔 1번마다 한 줄씩 저장되는 실제 체크인 기록입니다.
+
+자동 생성:
+
+```bash
+node scripts/create-challenge-checkins-database.mjs
+```
+
+이 스크립트는 기존 Challenge 데이터베이스와 같은 Notion 페이지 아래에 `Challenge Check-ins` DB를 만들고, `.env.local`에 필요한 ID를 추가합니다.
+
+필요한 컬럼:
+
+| 컬럼 이름 | 타입 |
+| --- | --- |
+| `Name` | Title |
+| `Member` | Relation |
+| `Challenge` | Relation |
+| `Date` | Date |
+| `Checked In At` | Date |
+| `Checked In By` | Rich text |
+| `Status` | Select |
+| `Method` | Select |
+
+중요:
+
+- `Member`는 Member 데이터베이스와 연결합니다.
+- `Challenge`는 Challenge 데이터베이스와 연결합니다.
+- 앱은 `Challenge Check-ins` DB를 기준으로 중복 체크인을 막고 참여명단을 불러옵니다.
+- `Checked In At`은 실제 스캔 시간이므로 `last_edited_time`보다 정확합니다.
 
 ### Payments 데이터베이스
 
@@ -240,6 +274,8 @@ GMAIL_APP_PASSWORD=google-app-password
 | `Code` | Rich text |
 | `Item` | Rich text |
 | `Price` | Rich text |
+| `Recorded By` | Rich text |
+| `Recorded At` | Date |
 
 현재 `Price`는 텍스트로 저장됩니다. 나중에 합계 계산이 필요하면 Notion에서 `Price`를 Number 타입으로 바꾸고 코드도 같이 바꾸면 됩니다.
 
@@ -288,6 +324,8 @@ NOTION_MEMBERS_DATABASE_ID=
 NOTION_MEMBERS_DATA_SOURCE_ID=
 NOTION_CHECKINS_DATABASE_ID=
 NOTION_CHECKINS_DATA_SOURCE_ID=
+NOTION_CHALLENGE_CHECKINS_DATABASE_ID=
+NOTION_CHALLENGE_CHECKINS_DATA_SOURCE_ID=
 NOTION_PAYMENTS_DATABASE_ID=
 NOTION_PAYMENTS_DATA_SOURCE_ID=
 NOTION_ADMINS_DATABASE_ID=

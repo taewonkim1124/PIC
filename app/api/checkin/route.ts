@@ -2,7 +2,7 @@ import {
   createCheckin,
   findParticipantByCode,
 } from "@/lib/notionStore";
-import { requireRole } from "@/lib/auth";
+import { currentSession, requireRole } from "@/lib/auth";
 
 type CheckinBody = {
   uniqueCode?: unknown;
@@ -43,11 +43,14 @@ export async function POST(request: Request) {
       return Response.json({ error: "등록된 멤버를 찾을 수 없습니다." }, { status: 404 });
     }
 
+    const session = await currentSession();
     const checkinDate = serverDate();
     const checkin = await createCheckin({
       participantId: participant.id,
+      participantName: participant.name,
       challenge: challengeId,
       date: checkinDate,
+      checkedInBy: session?.displayName ?? session?.username ?? "Unknown Admin",
       currentParticipationCount: participant.participation_count,
     });
 
