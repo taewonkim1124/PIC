@@ -293,12 +293,20 @@ GMAIL_USER=
 GMAIL_APP_PASSWORD=
 GOOGLE_FORM_SECRET=
 APP_AUTH_SECRET=
+ADMIN_USERS=
 ADMIN_PASSWORD=
 ```
 
 로그인 권한:
 
-- `ADMIN_PASSWORD`: 관리자용입니다. 멤버 관리, QR 발급, 체크인, 참여명단, 결제 장부에 접근할 수 있습니다.
+- `ADMIN_USERS`: 개별 관리자 계정 목록입니다. 로그인한 사람 이름이 결제 장부의 `Recorded By`에 저장됩니다.
+- `ADMIN_PASSWORD`: `ADMIN_USERS`를 아직 쓰지 않을 때 사용할 수 있는 기본 관리자 비밀번호입니다.
+
+개별 관리자 계정 예시:
+
+```env
+ADMIN_USERS=[{"username":"taewon","password":"change-this-password","name":"김태원"},{"username":"minjun","password":"change-this-password","name":"김민준"}]
+```
 
 주의:
 

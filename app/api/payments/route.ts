@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
     const session = await currentSession();
     const recordedAt = new Date().toISOString();
-    const recordedBy = session?.username ?? "admin";
+    const recordedBy = session?.displayName ?? session?.username ?? "admin";
 
     await createPayment({
       participantId: participant.id,

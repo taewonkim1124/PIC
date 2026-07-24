@@ -5,6 +5,7 @@ type AuthRole = "owner" | "admin";
 type AuthSession = {
   role: AuthRole;
   username: string;
+  displayName: string;
 };
 
 const authCookieName = "pic_auth";
@@ -47,6 +48,12 @@ function hex(buffer: ArrayBuffer) {
     .join("");
 }
 
+function decodeBase64Url(value: string) {
+  const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+  return atob(padded);
+}
+
 async function signPayload(payload: string) {
   const secret = process.env.APP_AUTH_SECRET || process.env.ADMIN_PASSWORD;
   if (!secret) return "";
@@ -64,13 +71,30 @@ async function signPayload(payload: string) {
 async function verifySession(token: string | undefined): Promise<AuthSession | null> {
   if (!token) return null;
 
-  const [role, username, signature] = token.split(".");
-  if ((role !== "owner" && role !== "admin") || !username) {
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature) return null;
+
+  const expected = await signPayload(payload);
+  if (!expected || signature !== expected) return null;
+
+  try {
+    const decoded = JSON.parse(decodeBase64Url(payload)) as Partial<AuthSession>;
+    if (
+      (decoded.role !== "owner" && decoded.role !== "admin") ||
+      !decoded.username ||
+      !decoded.displayName
+    ) {
+      return null;
+    }
+
+    return {
+      role: decoded.role,
+      username: decoded.username,
+      displayName: decoded.displayName,
+    };
+  } catch {
     return null;
   }
-
-  const expected = await signPayload(`${role}.${username}`);
-  return expected && signature === expected ? { role, username } : null;
 }
 
 function allowedRolesFor(pathname: string) {
