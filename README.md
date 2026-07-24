@@ -289,6 +289,8 @@ NOTION_CHECKINS_DATABASE_ID=
 NOTION_CHECKINS_DATA_SOURCE_ID=
 NOTION_PAYMENTS_DATABASE_ID=
 NOTION_PAYMENTS_DATA_SOURCE_ID=
+NOTION_ADMINS_DATABASE_ID=
+NOTION_ADMINS_DATA_SOURCE_ID=
 GMAIL_USER=
 GMAIL_APP_PASSWORD=
 GOOGLE_FORM_SECRET=
@@ -307,6 +309,41 @@ ADMIN_PASSWORD=
 ```env
 ADMIN_USERS=[{"username":"taewon","password":"change-this-password","name":"김태원"},{"username":"minjun","password":"change-this-password","name":"김민준"}]
 ```
+
+Notion 관리자 DB를 사용하는 경우:
+
+관리자 DB 컬럼:
+
+| 컬럼 이름 | 타입 |
+| --- | --- |
+| `Name` | Title |
+| `Username` | Rich text |
+| `Password Hash` | Rich text |
+| `Active` | Checkbox |
+
+비밀번호 해시 생성:
+
+```bash
+node scripts/hash-admin-password.mjs 사용할비밀번호
+```
+
+생성된 해시를 `Password Hash`에 넣고, `Active`를 체크하면 해당 관리자가 로그인할 수 있습니다. 이 방식을 쓰려면 Vercel 환경변수에 `NOTION_ADMINS_DATA_SOURCE_ID`를 등록해야 합니다.
+
+Admins DB 자동 생성:
+
+```bash
+node scripts/create-admins-database.mjs
+```
+
+현재 Member DB와 같은 Notion 페이지 아래에 `Admins` DB를 만들고, `.env.local`에 `NOTION_ADMINS_DATABASE_ID`, `NOTION_ADMINS_DATA_SOURCE_ID`를 추가합니다.
+
+관리자 추가:
+
+```bash
+node scripts/add-admin-user.mjs taewon 사용할비밀번호 김태원
+```
+
+그러면 Notion Admins DB에 `Name=김태원`, `Username=taewon`, `Password Hash=해시값`, `Active=체크됨`으로 추가됩니다. 이후 `taewon` 아이디로 로그인하면 결제 장부의 `Recorded By`에는 `김태원`으로 기록됩니다.
 
 주의:
 

@@ -118,6 +118,10 @@ export async function requireRole(allowedRoles: AuthRole[]) {
   return null;
 }
 
+export function passwordHash(password: string) {
+  return createHmac("sha256", authSecret()).update(password).digest("hex");
+}
+
 export function validLogin(role: AuthRole, password: string) {
   const envName = rolePasswords[role];
   const expected = process.env[envName];

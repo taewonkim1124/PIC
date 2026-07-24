@@ -5,6 +5,7 @@ import {
   createAuthToken,
   findLoginSession,
 } from "@/lib/auth";
+import { findNotionAdminLogin } from "@/lib/adminStore";
 
 type LoginBody = {
   username?: unknown;
@@ -22,7 +23,9 @@ export async function POST(request: Request) {
 
   const username = typeof body.username === "string" ? body.username : "";
   const password = typeof body.password === "string" ? body.password : "";
-  const session = findLoginSession(username, password);
+  const session =
+    (await findNotionAdminLogin(username, password)) ||
+    findLoginSession(username, password);
 
   if (!session) {
     return Response.json({ error: "Invalid username or password." }, { status: 401 });
