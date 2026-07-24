@@ -1,24 +1,23 @@
 "use client";
 
-import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import type { CSSProperties } from "react";
 
 import { pick, useLanguage } from "@/app/useLanguage";
 
-type Role = "owner" | "super_admin" | "admin";
+const savedUsernameKey = "pic-login-username";
 
 const copy = {
   ko: {
     eyebrow: "PIC 보안",
     title: "로그인",
-    description: "역할을 선택하고 비밀번호를 입력해 주세요.",
-    role: "역할",
-    owner: "Owner",
-    superAdmin: "Super Admin",
-    admin: "Admin",
+    description: "관리자 아이디와 비밀번호를 입력해 주세요.",
+    username: "아이디",
+    usernamePlaceholder: "owner, superadmin, admin",
+    rememberUsername: "아이디 저장",
     password: "비밀번호",
-    placeholder: "비밀번호 입력",
+    passwordPlaceholder: "비밀번호 입력",
     submit: "로그인",
     loading: "로그인 중...",
     failed: "로그인에 실패했습니다.",
@@ -26,13 +25,12 @@ const copy = {
   en: {
     eyebrow: "PIC Security",
     title: "Log In",
-    description: "Select your role and enter the password.",
-    role: "Role",
-    owner: "Owner",
-    superAdmin: "Super Admin",
-    admin: "Admin",
+    description: "Enter your admin username and password.",
+    username: "Username",
+    usernamePlaceholder: "owner, superadmin, admin",
+    rememberUsername: "Remember username",
     password: "Password",
-    placeholder: "Enter password",
+    passwordPlaceholder: "Enter password",
     submit: "Log In",
     loading: "Logging in...",
     failed: "Login failed.",
@@ -43,7 +41,14 @@ function LoginForm() {
   const { language } = useLanguage();
   const t = pick(language, copy);
   const searchParams = useSearchParams();
-  const [role, setRole] = useState<Role>("admin");
+  const [username, setUsername] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem(savedUsernameKey) ?? "";
+  });
+  const [rememberUsername, setRememberUsername] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(window.localStorage.getItem(savedUsernameKey));
+  });
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -57,11 +62,17 @@ function LoginForm() {
       const response = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role, password }),
+        body: JSON.stringify({ username, password }),
       });
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.error ?? t.failed);
+      }
+
+      if (rememberUsername) {
+        window.localStorage.setItem(savedUsernameKey, username.trim());
+      } else {
+        window.localStorage.removeItem(savedUsernameKey);
       }
 
       window.location.href = searchParams.get("next") || "/";
@@ -81,16 +92,23 @@ function LoginForm() {
 
         <form onSubmit={login} style={styles.form}>
           <label style={styles.label}>
-            {t.role}
-            <select
-              value={role}
-              onChange={(event) => setRole(event.target.value as Role)}
+            {t.username}
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              placeholder={t.usernamePlaceholder}
               style={styles.input}
-            >
-              <option value="admin">{t.admin}</option>
-              <option value="super_admin">{t.superAdmin}</option>
-              <option value="owner">{t.owner}</option>
-            </select>
+            />
+          </label>
+
+          <label style={styles.checkboxLabel}>
+            <input
+              checked={rememberUsername}
+              onChange={(event) => setRememberUsername(event.target.checked)}
+              type="checkbox"
+            />
+            {t.rememberUsername}
           </label>
 
           <label style={styles.label}>
@@ -99,12 +117,13 @@ function LoginForm() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               type="password"
-              placeholder={t.placeholder}
+              autoComplete="current-password"
+              placeholder={t.passwordPlaceholder}
               style={styles.input}
             />
           </label>
 
-          <button disabled={loading || !password} style={styles.button}>
+          <button disabled={loading || !username.trim() || !password} style={styles.button}>
             {loading ? t.loading : t.submit}
           </button>
         </form>
@@ -150,6 +169,14 @@ const styles: Record<string, CSSProperties> = {
   description: { margin: "0 0 24px", color: "#64748b", lineHeight: 1.6 },
   form: { display: "grid", gap: 14 },
   label: { display: "grid", gap: 7, fontSize: 14, fontWeight: 700 },
+  checkboxLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    color: "#475569",
+    fontSize: 14,
+    fontWeight: 700,
+  },
   input: {
     width: "100%",
     boxSizing: "border-box",

@@ -3,18 +3,14 @@ import { NextResponse } from "next/server";
 import {
   authCookieName,
   createAuthToken,
-  type AuthRole,
+  roleForUsername,
   validLogin,
 } from "@/lib/auth";
 
 type LoginBody = {
-  role?: unknown;
+  username?: unknown;
   password?: unknown;
 };
-
-function isRole(value: unknown): value is AuthRole {
-  return value === "owner" || value === "super_admin" || value === "admin";
-}
 
 export async function POST(request: Request) {
   let body: LoginBody;
@@ -25,11 +21,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const role = body.role;
+  const username = typeof body.username === "string" ? body.username : "";
   const password = typeof body.password === "string" ? body.password : "";
+  const role = roleForUsername(username);
 
-  if (!isRole(role) || !validLogin(role, password)) {
-    return Response.json({ error: "Invalid role or password." }, { status: 401 });
+  if (!role || !validLogin(role, password)) {
+    return Response.json({ error: "Invalid username or password." }, { status: 401 });
   }
 
   const response = NextResponse.json({ ok: true, role });

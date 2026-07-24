@@ -13,6 +13,12 @@ const rolePasswords: Record<AuthRole, string> = {
   admin: "ADMIN_PASSWORD",
 };
 
+const roleUsernames: Record<AuthRole, { envName: string; fallback: string }> = {
+  owner: { envName: "OWNER_USERNAME", fallback: "owner" },
+  super_admin: { envName: "SUPER_ADMIN_USERNAME", fallback: "superadmin" },
+  admin: { envName: "ADMIN_USERNAME", fallback: "admin" },
+};
+
 function authSecret() {
   const secret = process.env.APP_AUTH_SECRET || process.env.ADMIN_PASSWORD;
   if (!secret) {
@@ -71,4 +77,18 @@ export function validLogin(role: AuthRole, password: string) {
   const envName = rolePasswords[role];
   const expected = process.env[envName];
   return Boolean(expected && password && expected === password);
+}
+
+export function roleForUsername(username: string) {
+  const normalized = username.trim().toLowerCase();
+
+  for (const role of Object.keys(roleUsernames) as AuthRole[]) {
+    const { envName, fallback } = roleUsernames[role];
+    const expected = (process.env[envName] || fallback).trim().toLowerCase();
+    if (normalized && normalized === expected) {
+      return role;
+    }
+  }
+
+  return null;
 }
