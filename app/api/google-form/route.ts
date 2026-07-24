@@ -33,7 +33,7 @@ function isEmail(value: string) {
 
 function authorized(request: Request, body: GoogleFormBody) {
   const expected = process.env.GOOGLE_FORM_SECRET;
-  if (!expected) return true;
+  if (!expected) return false;
 
   const headerSecret = request.headers.get("x-google-form-secret");
   return headerSecret === expected || body.secret === expected;

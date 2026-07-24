@@ -25,20 +25,22 @@ const memberProperties = {
 const challengeProperties = {
   title: "Challenge Name",
   date: "Date",
-  participants: "참여명단",
-  participantCount: "Participant Count",
 } as const;
 
 const checkinProperties = {
   title: "Name",
   member: "Member",
   challenge: "Challenge",
-  date: "Date",
+  checkinDate: "Check-in Date",
   checkedInAt: "Checked In At",
-  checkedInBy: "Checked In By",
+  recordedBy: "Recorded By",
   status: "Status",
   method: "Method",
+  checkinKey: "Check-in Key",
 } as const;
+
+const validCheckinStatus = "Valid";
+const cancelledCheckinStatus = "Cancelled";
 
 const paymentProperties = {
   title: "Name",
@@ -340,39 +342,24 @@ async function ensureChallengePage(challenge: string, date: string) {
         [challengeProperties.date]: {
           date: { start: date },
         },
-        [challengeProperties.participantCount]: {
-          number: 0,
-        },
       },
     }),
   );
 }
 
 export async function findCheckin(
-  participantId: string,
-  challenge: string,
-  date: string,
+  checkinKey: string,
 ) {
-  const challengePage = await findChallengePage(challenge, date);
-  if (!challengePage) return false;
-
   const response = await notion.dataSources.query({
     data_source_id: challengeCheckinsDataSourceId(),
     page_size: 1,
     filter: {
       and: [
         {
-          property: checkinProperties.member,
-          relation: { contains: participantId },
+          property: checkinProperties.checkinKey,
+          rich_text: { equals: checkinKey },
         },
-        {
-          property: checkinProperties.challenge,
-          relation: { contains: challengePage.id },
-        },
-        {
-          property: checkinProperties.date,
-          date: { equals: date },
-        },
+        { property: checkinProperties.status, select: { equals: validCheckinStatus } },
       ],
     },
   });
@@ -390,36 +377,14 @@ async function countParticipationForParticipant(participantId: string) {
       page_size: 100,
       start_cursor: cursor,
       filter: {
-        property: checkinProperties.member,
-        relation: { contains: participantId },
-      },
-    });
-
-    count += response.results.filter(isFullPage).length;
-    cursor = response.next_cursor ?? undefined;
-  } while (cursor);
-
-  return count;
-}
-
-async function countCheckinsForChallenge(challengePageId: string, date: string) {
-  let cursor: string | undefined;
-  let count = 0;
-
-  do {
-    const response = await notion.dataSources.query({
-      data_source_id: challengeCheckinsDataSourceId(),
-      page_size: 100,
-      start_cursor: cursor,
-      filter: {
         and: [
           {
-            property: checkinProperties.challenge,
-            relation: { contains: challengePageId },
+            property: checkinProperties.member,
+            relation: { contains: participantId },
           },
           {
-            property: checkinProperties.date,
-            date: { equals: date },
+            property: checkinProperties.status,
+            select: { equals: validCheckinStatus },
           },
         ],
       },
@@ -448,30 +413,19 @@ async function updateMemberParticipationCount(
   });
 }
 
-async function updateChallengeParticipantCount(challengePageId: string, date: string) {
-  const count = await countCheckinsForChallenge(challengePageId, date);
-
-  await notion.pages.update({
-    page_id: challengePageId,
-    properties: {
-      [challengeProperties.participantCount]: {
-        number: count,
-      },
-    },
-  });
-}
-
 export async function createCheckin(input: {
   participantId: string;
   participantName: string;
   challenge: string;
   date: string;
-  checkedInBy: string;
+  method?: "QR" | "Manual";
+  recordedBy: string;
   currentParticipationCount?: number | null;
 }) {
   const challengePage = await ensureChallengePage(input.challenge, input.date);
+  const checkinKey = `${input.participantId}:${challengePage.id}:${input.date}`;
 
-  if (await findCheckin(input.participantId, input.challenge, input.date)) {
+  if (await findCheckin(checkinKey)) {
     return { alreadyCheckedIn: true };
   }
 
@@ -495,28 +449,28 @@ export async function createCheckin(input: {
       [checkinProperties.challenge]: {
         relation: [{ id: challengePage.id }],
       },
-      [checkinProperties.date]: {
+      [checkinProperties.checkinDate]: {
         date: { start: input.date },
       },
       [checkinProperties.checkedInAt]: {
         date: { start: checkedInAt },
       },
-      [checkinProperties.checkedInBy]: {
-        rich_text: [{ text: { content: input.checkedInBy } }],
+      [checkinProperties.recordedBy]: {
+        rich_text: [{ text: { content: input.recordedBy } }],
       },
       [checkinProperties.status]: {
-        select: { name: "Checked In" },
+        select: { name: validCheckinStatus },
       },
       [checkinProperties.method]: {
-        select: { name: "QR" },
+        select: { name: input.method ?? "QR" },
+      },
+      [checkinProperties.checkinKey]: {
+        rich_text: [{ text: { content: checkinKey } }],
       },
     },
   });
 
-  await Promise.all([
-    updateMemberParticipationCount(input.participantId),
-    updateChallengeParticipantCount(challengePage.id, input.date),
-  ]);
+  await updateMemberParticipationCount(input.participantId);
 
   return { alreadyCheckedIn: false };
 }
@@ -563,8 +517,12 @@ export async function getCheckins(challenge: string, date: string) {
             relation: { contains: challengePage.id },
           },
           {
-            property: checkinProperties.date,
+            property: checkinProperties.checkinDate,
             date: { equals: date },
+          },
+          {
+            property: checkinProperties.status,
+            select: { does_not_equal: cancelledCheckinStatus },
           },
         ],
       },
@@ -588,7 +546,8 @@ export async function getCheckins(challenge: string, date: string) {
           dateStart(checkin, checkinProperties.checkedInAt) ||
           checkin.created_time,
         method: propertyText(checkin, checkinProperties.method) || "QR",
-        checked_in_by: richText(checkin, checkinProperties.checkedInBy),
+        recorded_by: richText(checkin, checkinProperties.recordedBy),
+        status: propertyText(checkin, checkinProperties.status) || validCheckinStatus,
         participants: participant
           ? {
               name: title(participant, memberProperties.title),

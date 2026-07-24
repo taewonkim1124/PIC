@@ -3,15 +3,13 @@ import {
   findParticipantByCode,
 } from "@/lib/notionStore";
 import { currentSession, requireRole } from "@/lib/auth";
+import { newYorkDate } from "@/lib/dates";
 
 type CheckinBody = {
   uniqueCode?: unknown;
   challengeId?: unknown;
+  method?: unknown;
 };
-
-function serverDate() {
-  return new Date().toLocaleDateString("en-CA");
-}
 
 export async function POST(request: Request) {
   const unauthorized = await requireRole(["admin"]);
@@ -29,6 +27,7 @@ export async function POST(request: Request) {
     typeof body.uniqueCode === "string" ? body.uniqueCode.trim() : "";
   const challengeId =
     typeof body.challengeId === "string" ? body.challengeId.trim() : "";
+  const method = body.method === "Manual" ? "Manual" : "QR";
 
   if (!uniqueCode || !challengeId) {
     return Response.json(
@@ -44,13 +43,14 @@ export async function POST(request: Request) {
     }
 
     const session = await currentSession();
-    const checkinDate = serverDate();
+    const checkinDate = newYorkDate();
     const checkin = await createCheckin({
       participantId: participant.id,
       participantName: participant.name,
       challenge: challengeId,
       date: checkinDate,
-      checkedInBy: session?.displayName ?? session?.username ?? "Unknown Admin",
+      method,
+      recordedBy: session?.displayName ?? session?.username ?? "Unknown Admin",
       currentParticipationCount: participant.participation_count,
     });
 

@@ -1,9 +1,6 @@
 import { getCheckins } from "@/lib/notionStore";
 import { requireRole } from "@/lib/auth";
-
-function serverDate() {
-  return new Date().toLocaleDateString("en-CA");
-}
+import { newYorkDate } from "@/lib/dates";
 
 export async function GET(request: Request) {
   const unauthorized = await requireRole(["admin"]);
@@ -18,7 +15,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const date = serverDate();
+  const date = newYorkDate();
   try {
     const checkins = await getCheckins(challengeId.trim(), date);
     return Response.json({ date, checkins });

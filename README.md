@@ -142,6 +142,14 @@ GMAIL_APP_PASSWORD=google-app-password
 
 같은 멤버가 같은 날짜에 같은 챌린지로 이미 체크인했다면 다시 저장되지 않습니다. 체크인은 `Challenge Check-ins` DB에 한 명당 한 줄씩 저장됩니다.
 
+중복 체크인은 `Check-in Key`로 막습니다.
+
+```text
+memberPageId:challengePageId:YYYY-MM-DD
+```
+
+현재 앱은 챌린지를 `Challenge Name + Date`로 찾거나 만들기 때문에 날짜별 Challenge 페이지를 사용합니다. 그래서 `memberPageId:challengePageId`만으로도 같은 날짜 중복은 막을 수 있지만, 나중에 같은 Challenge 페이지를 여러 날짜에 재사용할 가능성까지 고려해서 날짜를 포함합니다.
+
 ### 참여명단
 
 ```text
@@ -155,6 +163,15 @@ GMAIL_APP_PASSWORD=google-app-password
 1. 챌린지를 선택합니다.
 2. `참여명단 불러오기` 버튼을 누릅니다.
 3. 오늘 참여한 멤버 이름과 이메일을 확인합니다.
+
+표시되는 정보:
+
+- 멤버 이름
+- 이메일
+- 체크인 시각
+- 체크인 방식
+- 처리 관리자
+- 체크인 상태
 
 ### 결제 장부
 
@@ -216,7 +233,7 @@ GMAIL_APP_PASSWORD=google-app-password
 
 ### Challenge 데이터베이스
 
-챌린지별 참여명단을 저장합니다.
+챌린지 하나당 한 페이지를 유지합니다.
 
 필요한 컬럼:
 
@@ -224,11 +241,18 @@ GMAIL_APP_PASSWORD=google-app-password
 | --- | --- |
 | `Challenge Name` | Title |
 | `Date` | Date |
-| `참여명단` | Relation |
-| `Participant Count` | Number |
 | `Check-ins` | Relation |
+| `Participant Count` | Rollup |
+| `Participants` | Rollup |
 
-`참여명단`은 기존 화면 호환용으로 남겨둘 수 있습니다. 실제 체크인 기록은 아래 `Challenge Check-ins` 데이터베이스가 기준입니다.
+`참여명단`은 기존 데이터 보존용으로 남겨둘 수 있습니다. 앱은 더 이상 이 relation 배열을 읽어서 덮어쓰지 않습니다. 실제 체크인 기록은 아래 `Challenge Check-ins` 데이터베이스가 기준입니다.
+
+Rollup 설정:
+
+| 컬럼 이름 | 설정 |
+| --- | --- |
+| `Participant Count` | Relation: `Check-ins`, Property: `Member`, Calculate: `Count unique values` |
+| `Participants` | Relation: `Check-ins`, Property: `Member`, Calculate: `Show unique values` |
 
 ### Challenge Check-ins 데이터베이스
 
@@ -242,6 +266,14 @@ node scripts/create-challenge-checkins-database.mjs
 
 이 스크립트는 기존 Challenge 데이터베이스와 같은 Notion 페이지 아래에 `Challenge Check-ins` DB를 만들고, `.env.local`에 필요한 ID를 추가합니다.
 
+기존에 만든 `Challenge Check-ins` DB의 컬럼명을 새 구조에 맞추려면 다음 스크립트를 사용합니다.
+
+```bash
+node scripts/update-challenge-checkins-schema.mjs
+```
+
+이 스크립트는 `Date`를 `Check-in Date`로, `Checked In By`를 `Recorded By`로 이름만 바꾸고, `Check-in Key`가 없으면 추가합니다. 기존 체크인 페이지는 삭제하지 않습니다.
+
 필요한 컬럼:
 
 | 컬럼 이름 | 타입 |
@@ -249,11 +281,12 @@ node scripts/create-challenge-checkins-database.mjs
 | `Name` | Title |
 | `Member` | Relation |
 | `Challenge` | Relation |
-| `Date` | Date |
 | `Checked In At` | Date |
-| `Checked In By` | Rich text |
-| `Status` | Select |
+| `Check-in Date` | Date |
 | `Method` | Select |
+| `Recorded By` | Rich text |
+| `Status` | Select |
+| `Check-in Key` | Rich text |
 
 중요:
 
@@ -261,6 +294,10 @@ node scripts/create-challenge-checkins-database.mjs
 - `Challenge`는 Challenge 데이터베이스와 연결합니다.
 - 앱은 `Challenge Check-ins` DB를 기준으로 중복 체크인을 막고 참여명단을 불러옵니다.
 - `Checked In At`은 실제 스캔 시간이므로 `last_edited_time`보다 정확합니다.
+- `Check-in Date`는 `America/New_York` 기준 날짜입니다.
+- `Status`는 정상 체크인은 `Valid`, 취소 기록은 `Cancelled`를 사용합니다.
+
+각 챌린지 페이지 내부에 전체 체크인 명단을 보려면 `Challenge Check-ins` DB의 linked view를 추가합니다. 자세한 설정과 기존 데이터 migration 절차는 [Challenge Check-ins 전환 가이드](docs/challenge-checkins-migration.md)를 참고하세요.
 
 ### Payments 데이터베이스
 

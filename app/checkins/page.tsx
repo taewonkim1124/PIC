@@ -9,7 +9,8 @@ type Checkin = {
   id: string;
   checked_in_at: string;
   method: string;
-  checked_in_by?: string;
+  recorded_by?: string;
+  status?: string;
   participants: { name: string; email: string | null } | null;
 };
 
@@ -24,6 +25,8 @@ const copy = {
     date: "날짜",
     count: "참여 인원",
     checkedInBy: "담당자",
+    method: "방식",
+    status: "상태",
     unknownMember: "알 수 없는 멤버",
     noEmail: "이메일 없음",
     empty: "아직 참여자가 없습니다.",
@@ -40,6 +43,8 @@ const copy = {
     date: "Date",
     count: "Count",
     checkedInBy: "Checked In By",
+    method: "Method",
+    status: "Status",
     unknownMember: "Unknown member",
     noEmail: "No email",
     empty: "No participants yet.",
@@ -156,7 +161,13 @@ export default function CheckinsPage() {
               )}
             </span>
             <span>
-              {t.checkedInBy}: {checkin.checked_in_by || "-"}
+              {t.method}: {checkin.method}
+            </span>
+            <span>
+              {t.checkedInBy}: {checkin.recorded_by || "-"}
+            </span>
+            <span>
+              {t.status}: {checkin.status || "-"}
             </span>
           </article>
         ))}
@@ -194,7 +205,7 @@ const styles: Record<string, CSSProperties> = {
   list: { display: "grid", gap: 10 },
   item: {
     display: "grid",
-    gridTemplateColumns: "2fr 2fr 1fr 1.5fr",
+    gridTemplateColumns: "2fr 2fr 1fr 1fr 1.5fr 1fr",
     gap: 12,
     padding: 16,
     border: "1px solid #ddd",

@@ -62,6 +62,7 @@ async function main() {
   const notion = new Client({ auth: process.env.NOTION_TOKEN });
   const participationCountProperty = "Participation Count";
   const memberProperty = "Member";
+  const statusProperty = "Status";
 
   const membersDataSource = await notion.dataSources.retrieve({
     data_source_id: membersDataSourceId,
@@ -81,10 +82,24 @@ async function main() {
     console.log(`${participationCountProperty} already exists.`);
   }
 
-  const [members, checkins] = await Promise.all([
-    collectPages(notion, membersDataSourceId),
-    collectPages(notion, challengeCheckinsDataSourceId),
-  ]);
+  const members = await collectPages(notion, membersDataSourceId);
+  const checkins = [];
+  let checkinCursor;
+
+  do {
+    const response = await notion.dataSources.query({
+      data_source_id: challengeCheckinsDataSourceId,
+      page_size: 100,
+      start_cursor: checkinCursor,
+      filter: {
+        property: statusProperty,
+        select: { equals: "Valid" },
+      },
+    });
+
+    checkins.push(...response.results.filter(isFullPage));
+    checkinCursor = response.next_cursor ?? undefined;
+  } while (checkinCursor);
 
   const counts = new Map(members.map((member) => [member.id, 0]));
 

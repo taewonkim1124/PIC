@@ -80,11 +80,26 @@ async function main() {
             single_property: {},
           },
         },
-        Date: { date: {} },
+        "Check-in Date": { date: {} },
         "Checked In At": { date: {} },
-        "Checked In By": { rich_text: {} },
-        Status: { select: { options: [{ name: "Checked In", color: "green" }] } },
-        Method: { select: { options: [{ name: "QR", color: "blue" }] } },
+        "Recorded By": { rich_text: {} },
+        Status: {
+          select: {
+            options: [
+              { name: "Valid", color: "green" },
+              { name: "Cancelled", color: "red" },
+            ],
+          },
+        },
+        Method: {
+          select: {
+            options: [
+              { name: "QR", color: "blue" },
+              { name: "Manual", color: "gray" },
+            ],
+          },
+        },
+        "Check-in Key": { rich_text: {} },
       },
     },
   });
