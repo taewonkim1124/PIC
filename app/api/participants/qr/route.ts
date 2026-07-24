@@ -5,6 +5,7 @@ import {
 } from "@/lib/notionStore";
 import { createUniqueParticipantCode } from "@/lib/participantCodes";
 import { sendQrEmail } from "@/lib/qrEmail";
+import { requireRole } from "@/lib/auth";
 
 type QrBody = {
   participantId?: unknown;
@@ -13,6 +14,9 @@ type QrBody = {
 };
 
 export async function POST(request: Request) {
+  const unauthorized = await requireRole(["admin"]);
+  if (unauthorized) return unauthorized;
+
   let body: QrBody;
 
   try {
@@ -64,6 +68,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const unauthorized = await requireRole(["admin"]);
+  if (unauthorized) return unauthorized;
+
   let body: { sendEmail?: unknown };
 
   try {

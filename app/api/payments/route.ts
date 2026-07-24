@@ -1,4 +1,5 @@
 import { createPayment, findParticipantByCode } from "@/lib/notionStore";
+import { requireRole } from "@/lib/auth";
 
 type PaymentBody = {
   uniqueCode?: unknown;
@@ -17,6 +18,9 @@ function amountNumber(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  const unauthorized = await requireRole(["admin", "payment"]);
+  if (unauthorized) return unauthorized;
+
   let body: PaymentBody;
 
   try {

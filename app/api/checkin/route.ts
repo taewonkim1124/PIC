@@ -2,6 +2,7 @@ import {
   createCheckin,
   findParticipantByCode,
 } from "@/lib/notionStore";
+import { requireRole } from "@/lib/auth";
 
 type CheckinBody = {
   uniqueCode?: unknown;
@@ -13,6 +14,9 @@ function serverDate() {
 }
 
 export async function POST(request: Request) {
+  const unauthorized = await requireRole(["admin", "scanner"]);
+  if (unauthorized) return unauthorized;
+
   let body: CheckinBody;
 
   try {

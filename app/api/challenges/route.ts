@@ -1,6 +1,10 @@
 import { getChallengeNames } from "@/lib/notionStore";
+import { requireRole } from "@/lib/auth";
 
 export async function GET() {
+  const unauthorized = await requireRole(["admin", "scanner", "payment"]);
+  if (unauthorized) return unauthorized;
+
   try {
     const challenges = await getChallengeNames();
     return Response.json({ challenges });

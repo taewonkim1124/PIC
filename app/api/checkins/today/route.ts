@@ -1,10 +1,14 @@
 import { getCheckins } from "@/lib/notionStore";
+import { requireRole } from "@/lib/auth";
 
 function serverDate() {
   return new Date().toLocaleDateString("en-CA");
 }
 
 export async function GET(request: Request) {
+  const unauthorized = await requireRole(["admin", "scanner"]);
+  if (unauthorized) return unauthorized;
+
   const challengeId = new URL(request.url).searchParams.get("challengeId") ?? "";
 
   if (!challengeId.trim()) {

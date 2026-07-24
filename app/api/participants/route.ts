@@ -5,6 +5,7 @@ import {
 } from "@/lib/notionStore";
 import { createUniqueParticipantCode } from "@/lib/participantCodes";
 import { sendQrEmail } from "@/lib/qrEmail";
+import { requireRole } from "@/lib/auth";
 
 type ParticipantBody = {
   name?: unknown;
@@ -13,6 +14,9 @@ type ParticipantBody = {
 };
 
 export async function GET() {
+  const unauthorized = await requireRole(["admin"]);
+  if (unauthorized) return unauthorized;
+
   try {
     const participants = await getParticipants();
     return Response.json({ participants });
@@ -26,6 +30,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const unauthorized = await requireRole(["admin"]);
+  if (unauthorized) return unauthorized;
+
   let body: ParticipantBody;
 
   try {

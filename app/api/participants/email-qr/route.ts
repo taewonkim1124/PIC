@@ -1,11 +1,15 @@
 import { getParticipantById } from "@/lib/notionStore";
 import { sendQrEmail } from "@/lib/qrEmail";
+import { requireRole } from "@/lib/auth";
 
 type EmailQrBody = {
   participantId?: unknown;
 };
 
 export async function POST(request: Request) {
+  const unauthorized = await requireRole(["admin"]);
+  if (unauthorized) return unauthorized;
+
   let body: EmailQrBody;
 
   try {
