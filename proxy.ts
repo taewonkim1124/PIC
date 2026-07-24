@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-type AuthRole = "owner" | "super_admin" | "admin";
+type AuthRole = "owner" | "admin";
 
 const authCookieName = "pic_auth";
 
@@ -16,7 +16,7 @@ const publicPaths = [
 ];
 
 const pageRules: Array<{ prefix: string; roles: AuthRole[] }> = [
-  { prefix: "/admin", roles: ["owner", "super_admin"] },
+  { prefix: "/admin", roles: ["admin"] },
   { prefix: "/scan", roles: ["admin"] },
   { prefix: "/payment", roles: ["admin"] },
   { prefix: "/checkins", roles: ["admin"] },
@@ -24,7 +24,7 @@ const pageRules: Array<{ prefix: string; roles: AuthRole[] }> = [
 ];
 
 const apiRules: Array<{ prefix: string; roles: AuthRole[] }> = [
-  { prefix: "/api/participants", roles: ["owner", "super_admin"] },
+  { prefix: "/api/participants", roles: ["admin"] },
   { prefix: "/api/checkin", roles: ["admin"] },
   { prefix: "/api/checkins", roles: ["admin"] },
   { prefix: "/api/challenges", roles: ["admin"] },
@@ -61,7 +61,7 @@ async function verifyRole(token: string | undefined) {
   if (!token) return null;
 
   const [role, signature] = token.split(".");
-  if (role !== "owner" && role !== "super_admin" && role !== "admin") {
+  if (role !== "owner" && role !== "admin") {
     return null;
   }
 
@@ -77,7 +77,6 @@ function allowedRolesFor(pathname: string) {
 function canAccess(role: AuthRole | null, allowedRoles: AuthRole[]) {
   return (
     role === "owner" ||
-    role === "super_admin" ||
     (role !== null && allowedRoles.includes(role))
   );
 }

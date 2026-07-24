@@ -7,7 +7,7 @@ type EmailQrBody = {
 };
 
 export async function POST(request: Request) {
-  const unauthorized = await requireRole(["owner", "super_admin"]);
+  const unauthorized = await requireRole(["admin"]);
   if (unauthorized) return unauthorized;
 
   let body: EmailQrBody;

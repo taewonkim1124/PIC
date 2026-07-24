@@ -3,19 +3,17 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
-export type AuthRole = "owner" | "super_admin" | "admin";
+export type AuthRole = "owner" | "admin";
 
 export const authCookieName = "pic_auth";
 
 const rolePasswords: Record<AuthRole, string> = {
   owner: "OWNER_PASSWORD",
-  super_admin: "SUPER_ADMIN_PASSWORD",
   admin: "ADMIN_PASSWORD",
 };
 
 const roleUsernames: Record<AuthRole, { envName: string; fallback: string }> = {
   owner: { envName: "OWNER_USERNAME", fallback: "owner" },
-  super_admin: { envName: "SUPER_ADMIN_USERNAME", fallback: "superadmin" },
   admin: { envName: "ADMIN_USERNAME", fallback: "admin" },
 };
 
@@ -39,7 +37,7 @@ export function verifyAuthToken(token: string | undefined) {
   if (!token) return null;
 
   const [role, signature] = token.split(".");
-  if (role !== "owner" && role !== "super_admin" && role !== "admin") {
+  if (role !== "owner" && role !== "admin") {
     return null;
   }
   if (!signature) return null;
@@ -60,7 +58,6 @@ export async function currentRole() {
 export function roleCanAccess(role: AuthRole | null, allowedRoles: AuthRole[]) {
   return (
     role === "owner" ||
-    role === "super_admin" ||
     (role !== null && allowedRoles.includes(role))
   );
 }

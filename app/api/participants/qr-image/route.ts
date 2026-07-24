@@ -3,7 +3,7 @@ import { requireRole } from "@/lib/auth";
 import { getParticipantById } from "@/lib/notionStore";
 
 export async function GET(request: Request) {
-  const unauthorized = await requireRole(["owner", "super_admin"]);
+  const unauthorized = await requireRole(["admin"]);
   if (unauthorized) return unauthorized;
 
   const participantId =
