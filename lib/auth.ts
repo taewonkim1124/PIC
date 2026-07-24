@@ -4,6 +4,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
 export type AuthRole = "owner" | "admin";
+export type AuthSession = {
+  role: AuthRole;
+  username: string;
+};
 
 export const authCookieName = "pic_auth";
 
@@ -25,34 +29,48 @@ function authSecret() {
   return secret;
 }
 
-function signRole(role: AuthRole) {
-  return createHmac("sha256", authSecret()).update(role).digest("hex");
+function isRole(value: string): value is AuthRole {
+  return value === "owner" || value === "admin";
 }
 
-export function createAuthToken(role: AuthRole) {
-  return `${role}.${signRole(role)}`;
+function signPayload(payload: string) {
+  return createHmac("sha256", authSecret()).update(payload).digest("hex");
 }
 
-export function verifyAuthToken(token: string | undefined) {
+function safeUsername(username: string) {
+  return username.trim().toLowerCase().replaceAll(".", "_");
+}
+
+export function createAuthToken(role: AuthRole, username: string) {
+  const safeName = safeUsername(username);
+  const payload = `${role}.${safeName}`;
+  return `${payload}.${signPayload(payload)}`;
+}
+
+export function verifyAuthToken(token: string | undefined): AuthSession | null {
   if (!token) return null;
 
-  const [role, signature] = token.split(".");
-  if (role !== "owner" && role !== "admin") {
+  const [role, username, signature] = token.split(".");
+  if (!isRole(role) || !username) {
     return null;
   }
   if (!signature) return null;
 
-  const expected = signRole(role);
+  const expected = signPayload(`${role}.${username}`);
   const expectedBuffer = Buffer.from(expected);
   const actualBuffer = Buffer.from(signature);
   if (expectedBuffer.length !== actualBuffer.length) return null;
 
-  return timingSafeEqual(expectedBuffer, actualBuffer) ? role : null;
+  return timingSafeEqual(expectedBuffer, actualBuffer) ? { role, username } : null;
+}
+
+export async function currentSession() {
+  const cookieStore = await cookies();
+  return verifyAuthToken(cookieStore.get(authCookieName)?.value);
 }
 
 export async function currentRole() {
-  const cookieStore = await cookies();
-  return verifyAuthToken(cookieStore.get(authCookieName)?.value);
+  return (await currentSession())?.role ?? null;
 }
 
 export function roleCanAccess(role: AuthRole | null, allowedRoles: AuthRole[]) {

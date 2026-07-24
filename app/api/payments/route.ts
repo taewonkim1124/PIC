@@ -1,5 +1,5 @@
 import { createPayment, findParticipantByCode } from "@/lib/notionStore";
-import { requireRole } from "@/lib/auth";
+import { currentSession, requireRole } from "@/lib/auth";
 
 type PaymentBody = {
   uniqueCode?: unknown;
@@ -54,12 +54,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const session = await currentSession();
+    const recordedAt = new Date().toISOString();
+    const recordedBy = session?.username ?? "admin";
+
     await createPayment({
       participantId: participant.id,
       participantName: participant.name,
       uniqueCode,
       amount,
       item,
+      recordedBy,
+      recordedAt,
     });
 
     return Response.json(
@@ -68,6 +74,8 @@ export async function POST(request: Request) {
         participantName: participant.name,
         amount,
         item,
+        recordedBy,
+        recordedAt,
         message: `${participant.name}님의 결제 기록이 저장되었습니다.`,
       },
       { status: 201 },

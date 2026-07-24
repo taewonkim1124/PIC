@@ -34,6 +34,8 @@ const paymentProperties = {
   uniqueCode: "Code",
   item: "Item",
   amount: "Price",
+  recordedBy: "Recorded By",
+  recordedAt: "Recorded At",
 } as const;
 
 function requiredEnv(name: string) {
@@ -453,6 +455,8 @@ export async function createPayment(input: {
   uniqueCode: string;
   amount: number;
   item: string;
+  recordedBy: string;
+  recordedAt: string;
 }) {
   return notion.pages.create({
     parent: { data_source_id: paymentsDataSourceId() },
@@ -468,6 +472,12 @@ export async function createPayment(input: {
       },
       [paymentProperties.amount]: {
         rich_text: [{ text: { content: String(input.amount) } }],
+      },
+      [paymentProperties.recordedBy]: {
+        rich_text: [{ text: { content: input.recordedBy } }],
+      },
+      [paymentProperties.recordedAt]: {
+        date: { start: input.recordedAt },
       },
     },
   });

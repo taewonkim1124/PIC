@@ -17,6 +17,8 @@ type PaymentResult = {
   participantName?: string;
   amount?: number;
   item?: string;
+  recordedBy?: string;
+  recordedAt?: string;
   message?: string;
   error?: string;
 };
@@ -43,6 +45,8 @@ const copy = {
     cameraFailed: "카메라를 시작하지 못했습니다. 브라우저 권한을 확인해 주세요.",
     serverFailed: "결제 서버에 연결하지 못했습니다.",
     paid: "결제 기록이 저장되었습니다.",
+    recordedBy: "기입자",
+    recordedAt: "기입 시간",
   },
   en: {
     eyebrow: "PIC Ledger",
@@ -65,6 +69,8 @@ const copy = {
     cameraFailed: "Could not start the camera. Please check browser permission.",
     serverFailed: "Could not connect to the payment server.",
     paid: "Payment record saved.",
+    recordedBy: "Recorded by",
+    recordedAt: "Recorded at",
   },
 } as const;
 
@@ -261,6 +267,16 @@ export default function PaymentPage() {
             {paymentResult.status === "paid" ? (
               <p style={styles.resultText}>
                 {paymentResult.item} / ${paymentResult.amount}
+              </p>
+            ) : null}
+            {paymentResult.status === "paid" && paymentResult.recordedBy ? (
+              <p style={styles.resultText}>
+                {t.recordedBy}: {paymentResult.recordedBy}
+                {paymentResult.recordedAt
+                  ? ` / ${t.recordedAt}: ${new Date(
+                      paymentResult.recordedAt,
+                    ).toLocaleString()}`
+                  : ""}
               </p>
             ) : null}
             <p style={styles.resultText}>

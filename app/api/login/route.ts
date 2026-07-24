@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   }
 
   const response = NextResponse.json({ ok: true, role });
-  response.cookies.set(authCookieName, createAuthToken(role), {
+  response.cookies.set(authCookieName, createAuthToken(role, username), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

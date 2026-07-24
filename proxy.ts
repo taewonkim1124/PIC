@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 type AuthRole = "owner" | "admin";
+type AuthSession = {
+  role: AuthRole;
+  username: string;
+};
 
 const authCookieName = "pic_auth";
 
@@ -43,7 +47,7 @@ function hex(buffer: ArrayBuffer) {
     .join("");
 }
 
-async function signRole(role: AuthRole) {
+async function signPayload(payload: string) {
   const secret = process.env.APP_AUTH_SECRET || process.env.ADMIN_PASSWORD;
   if (!secret) return "";
 
@@ -54,19 +58,19 @@ async function signRole(role: AuthRole) {
     false,
     ["sign"],
   );
-  return hex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(role)));
+  return hex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload)));
 }
 
-async function verifyRole(token: string | undefined) {
+async function verifySession(token: string | undefined): Promise<AuthSession | null> {
   if (!token) return null;
 
-  const [role, signature] = token.split(".");
-  if (role !== "owner" && role !== "admin") {
+  const [role, username, signature] = token.split(".");
+  if ((role !== "owner" && role !== "admin") || !username) {
     return null;
   }
 
-  const expected = await signRole(role);
-  return expected && signature === expected ? role : null;
+  const expected = await signPayload(`${role}.${username}`);
+  return expected && signature === expected ? { role, username } : null;
 }
 
 function allowedRolesFor(pathname: string) {
@@ -90,8 +94,8 @@ export async function proxy(request: NextRequest) {
   const allowedRoles = allowedRolesFor(pathname);
   if (!allowedRoles) return NextResponse.next();
 
-  const role = await verifyRole(request.cookies.get(authCookieName)?.value);
-  if (canAccess(role, allowedRoles)) {
+  const session = await verifySession(request.cookies.get(authCookieName)?.value);
+  if (canAccess(session?.role ?? null, allowedRoles)) {
     return NextResponse.next();
   }
 
