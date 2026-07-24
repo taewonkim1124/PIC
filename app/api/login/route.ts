@@ -13,7 +13,7 @@ type LoginBody = {
 };
 
 function isRole(value: unknown): value is AuthRole {
-  return value === "admin" || value === "scanner" || value === "payment";
+  return value === "owner" || value === "super_admin" || value === "admin";
 }
 
 export async function POST(request: Request) {

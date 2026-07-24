@@ -18,7 +18,7 @@ function amountNumber(value: unknown) {
 }
 
 export async function POST(request: Request) {
-  const unauthorized = await requireRole(["admin", "payment"]);
+  const unauthorized = await requireRole(["admin"]);
   if (unauthorized) return unauthorized;
 
   let body: PaymentBody;

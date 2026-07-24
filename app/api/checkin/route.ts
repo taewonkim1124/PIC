@@ -14,7 +14,7 @@ function serverDate() {
 }
 
 export async function POST(request: Request) {
-  const unauthorized = await requireRole(["admin", "scanner"]);
+  const unauthorized = await requireRole(["admin"]);
   if (unauthorized) return unauthorized;
 
   let body: CheckinBody;

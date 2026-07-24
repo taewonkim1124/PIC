@@ -6,7 +6,7 @@ function serverDate() {
 }
 
 export async function GET(request: Request) {
-  const unauthorized = await requireRole(["admin", "scanner"]);
+  const unauthorized = await requireRole(["admin"]);
   if (unauthorized) return unauthorized;
 
   const challengeId = new URL(request.url).searchParams.get("challengeId") ?? "";

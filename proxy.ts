@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-type AuthRole = "admin" | "scanner" | "payment";
+type AuthRole = "owner" | "super_admin" | "admin";
 
 const authCookieName = "pic_auth";
 
@@ -17,18 +17,18 @@ const publicPaths = [
 ];
 
 const pageRules: Array<{ prefix: string; roles: AuthRole[] }> = [
-  { prefix: "/admin", roles: ["admin"] },
-  { prefix: "/scan", roles: ["admin", "scanner"] },
-  { prefix: "/payment", roles: ["admin", "payment"] },
-  { prefix: "/checkins", roles: ["admin", "scanner"] },
+  { prefix: "/admin", roles: ["owner", "super_admin"] },
+  { prefix: "/scan", roles: ["admin"] },
+  { prefix: "/payment", roles: ["admin"] },
+  { prefix: "/checkins", roles: ["admin"] },
 ];
 
 const apiRules: Array<{ prefix: string; roles: AuthRole[] }> = [
-  { prefix: "/api/participants", roles: ["admin"] },
-  { prefix: "/api/checkin", roles: ["admin", "scanner"] },
-  { prefix: "/api/checkins", roles: ["admin", "scanner"] },
-  { prefix: "/api/challenges", roles: ["admin", "scanner", "payment"] },
-  { prefix: "/api/payments", roles: ["admin", "payment"] },
+  { prefix: "/api/participants", roles: ["owner", "super_admin"] },
+  { prefix: "/api/checkin", roles: ["admin"] },
+  { prefix: "/api/checkins", roles: ["admin"] },
+  { prefix: "/api/challenges", roles: ["admin"] },
+  { prefix: "/api/payments", roles: ["admin"] },
 ];
 
 function isPublicPath(pathname: string) {
@@ -61,11 +61,7 @@ async function verifyRole(token: string | undefined) {
   if (!token) return null;
 
   const [role, signature] = token.split(".");
-  if (
-    role !== "admin" &&
-    role !== "scanner" &&
-    role !== "payment"
-  ) {
+  if (role !== "owner" && role !== "super_admin" && role !== "admin") {
     return null;
   }
 
@@ -79,7 +75,11 @@ function allowedRolesFor(pathname: string) {
 }
 
 function canAccess(role: AuthRole | null, allowedRoles: AuthRole[]) {
-  return role === "admin" || (role !== null && allowedRoles.includes(role));
+  return (
+    role === "owner" ||
+    role === "super_admin" ||
+    (role !== null && allowedRoles.includes(role))
+  );
 }
 
 export async function proxy(request: NextRequest) {

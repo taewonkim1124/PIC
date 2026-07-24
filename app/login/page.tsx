@@ -1,13 +1,12 @@
 "use client";
 
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { useState } from "react";
 import type { CSSProperties } from "react";
 
 import { pick, useLanguage } from "@/app/useLanguage";
 
-type Role = "admin" | "scanner" | "payment";
+type Role = "owner" | "super_admin" | "admin";
 
 const copy = {
   ko: {
@@ -15,9 +14,9 @@ const copy = {
     title: "로그인",
     description: "역할을 선택하고 비밀번호를 입력해 주세요.",
     role: "역할",
-    admin: "관리자",
-    scanner: "체크인 담당자",
-    payment: "결제 담당자",
+    owner: "Owner",
+    superAdmin: "Super Admin",
+    admin: "Admin",
     password: "비밀번호",
     placeholder: "비밀번호 입력",
     submit: "로그인",
@@ -29,9 +28,9 @@ const copy = {
     title: "Log In",
     description: "Select your role and enter the password.",
     role: "Role",
+    owner: "Owner",
+    superAdmin: "Super Admin",
     admin: "Admin",
-    scanner: "Check-in Staff",
-    payment: "Payment Staff",
     password: "Password",
     placeholder: "Enter password",
     submit: "Log In",
@@ -44,7 +43,7 @@ function LoginForm() {
   const { language } = useLanguage();
   const t = pick(language, copy);
   const searchParams = useSearchParams();
-  const [role, setRole] = useState<Role>("scanner");
+  const [role, setRole] = useState<Role>("admin");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -88,9 +87,9 @@ function LoginForm() {
               onChange={(event) => setRole(event.target.value as Role)}
               style={styles.input}
             >
-              <option value="scanner">{t.scanner}</option>
-              <option value="payment">{t.payment}</option>
               <option value="admin">{t.admin}</option>
+              <option value="super_admin">{t.superAdmin}</option>
+              <option value="owner">{t.owner}</option>
             </select>
           </label>
 

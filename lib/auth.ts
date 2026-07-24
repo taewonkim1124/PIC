@@ -3,14 +3,14 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
-export type AuthRole = "admin" | "scanner" | "payment";
+export type AuthRole = "owner" | "super_admin" | "admin";
 
 export const authCookieName = "pic_auth";
 
 const rolePasswords: Record<AuthRole, string> = {
+  owner: "OWNER_PASSWORD",
+  super_admin: "SUPER_ADMIN_PASSWORD",
   admin: "ADMIN_PASSWORD",
-  scanner: "SCANNER_PASSWORD",
-  payment: "PAYMENT_PASSWORD",
 };
 
 function authSecret() {
@@ -33,11 +33,7 @@ export function verifyAuthToken(token: string | undefined) {
   if (!token) return null;
 
   const [role, signature] = token.split(".");
-  if (
-    role !== "admin" &&
-    role !== "scanner" &&
-    role !== "payment"
-  ) {
+  if (role !== "owner" && role !== "super_admin" && role !== "admin") {
     return null;
   }
   if (!signature) return null;
@@ -56,7 +52,11 @@ export async function currentRole() {
 }
 
 export function roleCanAccess(role: AuthRole | null, allowedRoles: AuthRole[]) {
-  return role === "admin" || (role !== null && allowedRoles.includes(role));
+  return (
+    role === "owner" ||
+    role === "super_admin" ||
+    (role !== null && allowedRoles.includes(role))
+  );
 }
 
 export async function requireRole(allowedRoles: AuthRole[]) {
