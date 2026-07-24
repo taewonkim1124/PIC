@@ -31,6 +31,7 @@ https://pic-beta-blue.vercel.app
 - 멤버 관리
 - 참여명단
 - 결제 장부
+- 비밀번호 변경
 
 ### 멤버 관리
 
@@ -301,8 +302,9 @@ ADMIN_PASSWORD=
 
 로그인 권한:
 
-- `ADMIN_USERS`: 개별 관리자 계정 목록입니다. 로그인한 사람 이름이 결제 장부의 `Recorded By`에 저장됩니다.
-- `ADMIN_PASSWORD`: `ADMIN_USERS`를 아직 쓰지 않을 때 사용할 수 있는 기본 관리자 비밀번호입니다.
+- 운영진 계정은 Notion Admins DB에 직접 입력해서 관리합니다.
+- 로그인한 사람 이름이 결제 장부의 `Recorded By`에 저장됩니다.
+- `ADMIN_USERS`, `ADMIN_PASSWORD`는 Notion Admins DB를 쓰기 전 임시/백업용입니다.
 
 개별 관리자 계정 예시:
 
@@ -310,7 +312,7 @@ ADMIN_PASSWORD=
 ADMIN_USERS=[{"username":"taewon","password":"change-this-password","name":"김태원"},{"username":"minjun","password":"change-this-password","name":"김민준"}]
 ```
 
-Notion 관리자 DB를 사용하는 경우:
+### Notion 관리자 DB
 
 관리자 DB 컬럼:
 
@@ -328,23 +330,17 @@ Notion 관리자 DB를 사용하는 경우:
 node scripts/hash-admin-password.mjs 사용할비밀번호
 ```
 
-생성된 해시를 `Password Hash`에 넣고, `Active`를 체크하면 해당 관리자가 로그인할 수 있습니다. `활동중` 컬럼을 Select 또는 Status로 쓰는 경우에는 값이 `활동중`, `재직`, `현직` 중 하나일 때만 로그인할 수 있습니다. 이 방식을 쓰려면 Vercel 환경변수에 `NOTION_ADMINS_DATA_SOURCE_ID`를 등록해야 합니다.
+생성된 해시를 `Password Hash`에 넣고, `Active`를 체크하면 해당 관리자가 로그인할 수 있습니다. `활동중` 컬럼을 Select 또는 Status로 쓰는 경우에는 값이 `활동중`, `재직`, `현직` 중 하나일 때만 로그인할 수 있습니다.
 
-Admins DB 자동 생성:
+관리자 계정 추가 순서:
 
-```bash
-node scripts/create-admins-database.mjs
-```
+1. 회장이 임시 비밀번호를 정합니다.
+2. `node scripts/hash-admin-password.mjs 임시비밀번호`로 해시를 만듭니다.
+3. Notion Admins DB에 `Name`, `Username`, `Password Hash`, `Active`를 직접 입력합니다.
+4. 운영진에게 `Username`과 임시 비밀번호를 전달합니다.
+5. 운영진은 로그인 후 `/account/password`에서 본인 비밀번호로 변경합니다.
 
-현재 Member DB와 같은 Notion 페이지 아래에 `Admins` DB를 만들고, `.env.local`에 `NOTION_ADMINS_DATABASE_ID`, `NOTION_ADMINS_DATA_SOURCE_ID`를 추가합니다.
-
-관리자 추가:
-
-```bash
-node scripts/add-admin-user.mjs taewon 사용할비밀번호 김태원
-```
-
-그러면 Notion Admins DB에 `Name=김태원`, `Username=taewon`, `Password Hash=해시값`, `Active=체크됨`으로 추가됩니다. 이후 `taewon` 아이디로 로그인하면 결제 장부의 `Recorded By`에는 `김태원`으로 기록됩니다.
+이 방식을 쓰려면 Vercel 환경변수에 `NOTION_ADMINS_DATA_SOURCE_ID`를 등록해야 합니다.
 
 주의:
 

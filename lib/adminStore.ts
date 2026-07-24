@@ -25,13 +25,19 @@ const allowedActiveStatuses = new Set([
 ]);
 
 type NotionAdminUser = {
+  id: string;
   username: string;
   displayName: string;
   passwordHash: string;
+  active: boolean;
 };
 
 function adminsDataSourceId() {
-  return process.env.NOTION_ADMINS_DATA_SOURCE_ID;
+  const dataSourceId = process.env.NOTION_ADMINS_DATA_SOURCE_ID;
+  if (!dataSourceId) {
+    throw new Error("NOTION_ADMINS_DATA_SOURCE_ID is not configured.");
+  }
+  return dataSourceId;
 }
 
 function title(page: PageObjectResponse, property: string) {
@@ -88,8 +94,6 @@ function safeCompare(a: string, b: string) {
 }
 
 function adminFromPage(page: PageObjectResponse): NotionAdminUser | null {
-  if (!canAdminLogin(page)) return null;
-
   const displayName = title(page, adminProperties.title).trim();
   const username = richText(page, adminProperties.username).trim().toLowerCase();
   const storedHash = richText(page, adminProperties.passwordHash).trim();
@@ -97,19 +101,20 @@ function adminFromPage(page: PageObjectResponse): NotionAdminUser | null {
   if (!displayName || !username || !storedHash) return null;
 
   return {
+    id: page.id,
     displayName,
     username,
     passwordHash: storedHash,
+    active: canAdminLogin(page),
   };
 }
 
-export async function findNotionAdminLogin(username: string, password: string) {
-  const dataSourceId = adminsDataSourceId();
+async function findAdminPageByUsername(username: string) {
   const normalizedUsername = username.trim().toLowerCase();
-  if (!dataSourceId || !normalizedUsername || !password) return null;
+  if (!normalizedUsername) return null;
 
   const response = await notion.dataSources.query({
-    data_source_id: dataSourceId,
+    data_source_id: adminsDataSourceId(),
     page_size: 1,
     filter: {
       property: adminProperties.username,
@@ -117,11 +122,20 @@ export async function findNotionAdminLogin(username: string, password: string) {
     },
   });
 
-  const page = response.results.find(isFullPage);
+  return response.results.find(isFullPage) ?? null;
+}
+
+export async function findNotionAdminLogin(username: string, password: string) {
+  const normalizedUsername = username.trim().toLowerCase();
+  if (!normalizedUsername || !password || !process.env.NOTION_ADMINS_DATA_SOURCE_ID) {
+    return null;
+  }
+
+  const page = await findAdminPageByUsername(normalizedUsername);
   if (!page) return null;
 
   const admin = adminFromPage(page);
-  if (!admin) return null;
+  if (!admin || !admin.active) return null;
 
   const attemptedHash = passwordHash(password);
   if (!safeCompare(admin.passwordHash, attemptedHash)) return null;
@@ -131,4 +145,34 @@ export async function findNotionAdminLogin(username: string, password: string) {
     username: admin.username,
     displayName: admin.displayName,
   };
+}
+
+export async function changeAdminPassword(input: {
+  username: string;
+  currentPassword: string;
+  nextPassword: string;
+}) {
+  const page = await findAdminPageByUsername(input.username);
+  if (!page) {
+    throw new Error("Admin account was not found.");
+  }
+
+  const admin = adminFromPage(page);
+  if (!admin || !admin.active) {
+    throw new Error("This admin account is not active.");
+  }
+
+  const currentHash = passwordHash(input.currentPassword);
+  if (!safeCompare(admin.passwordHash, currentHash)) {
+    throw new Error("Current password is incorrect.");
+  }
+
+  await notion.pages.update({
+    page_id: admin.id,
+    properties: {
+      [adminProperties.passwordHash]: {
+        rich_text: [{ text: { content: passwordHash(input.nextPassword) } }],
+      },
+    },
+  });
 }

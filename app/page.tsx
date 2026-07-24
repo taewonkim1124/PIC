@@ -40,6 +40,12 @@ const copy = {
         description: "멤버 QR을 스캔해서 결제 기록을 Notion 장부에 저장합니다.",
         color: "#c2410c",
       },
+      {
+        href: "/account/password",
+        title: "비밀번호 변경",
+        description: "운영진 계정의 비밀번호를 본인이 직접 변경합니다.",
+        color: "#7c3aed",
+      },
     ],
   },
   en: {
@@ -76,6 +82,12 @@ const copy = {
         description:
           "Scan member QR codes and save payment records to the Notion ledger.",
         color: "#c2410c",
+      },
+      {
+        href: "/account/password",
+        title: "Change Password",
+        description: "Change the password for your staff account.",
+        color: "#7c3aed",
       },
     ],
   },

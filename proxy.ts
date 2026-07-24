@@ -22,6 +22,7 @@ const publicPaths = [
 
 const pageRules: Array<{ prefix: string; roles: AuthRole[] }> = [
   { prefix: "/admin", roles: ["admin"] },
+  { prefix: "/account", roles: ["admin"] },
   { prefix: "/scan", roles: ["admin"] },
   { prefix: "/payment", roles: ["admin"] },
   { prefix: "/checkins", roles: ["admin"] },
@@ -30,6 +31,7 @@ const pageRules: Array<{ prefix: string; roles: AuthRole[] }> = [
 
 const apiRules: Array<{ prefix: string; roles: AuthRole[] }> = [
   { prefix: "/api/participants", roles: ["admin"] },
+  { prefix: "/api/account", roles: ["admin"] },
   { prefix: "/api/checkin", roles: ["admin"] },
   { prefix: "/api/checkins", roles: ["admin"] },
   { prefix: "/api/challenges", roles: ["admin"] },
@@ -137,6 +139,7 @@ export const config = {
   matcher: [
     "/",
     "/admin/:path*",
+    "/account/:path*",
     "/scan/:path*",
     "/payment/:path*",
     "/checkins/:path*",
