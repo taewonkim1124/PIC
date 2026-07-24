@@ -28,7 +28,7 @@ const challengeProperties = {
 } as const;
 
 const checkinProperties = {
-  title: "Name",
+  title: "Check-in",
   member: "Member",
   challenge: "Challenge",
   checkinDate: "Check-in Date",

@@ -272,13 +272,13 @@ node scripts/create-challenge-checkins-database.mjs
 node scripts/update-challenge-checkins-schema.mjs
 ```
 
-이 스크립트는 `Date`를 `Check-in Date`로, `Checked In By`를 `Recorded By`로 이름만 바꾸고, `Check-in Key`가 없으면 추가합니다. 기존 체크인 페이지는 삭제하지 않습니다.
+이 스크립트는 `Name`을 `Check-in`으로, `Date`를 `Check-in Date`로, `Checked In By`를 `Recorded By`로 이름만 바꾸고, `Check-in Key`가 없으면 추가합니다. 기존 체크인 페이지는 삭제하지 않습니다.
 
 필요한 컬럼:
 
 | 컬럼 이름 | 타입 |
 | --- | --- |
-| `Name` | Title |
+| `Check-in` | Title |
 | `Member` | Relation |
 | `Challenge` | Relation |
 | `Checked In At` | Date |

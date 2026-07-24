@@ -38,6 +38,10 @@ async function main() {
 
   const properties = {};
 
+  if (dataSource.properties.Name && !dataSource.properties["Check-in"]) {
+    properties.Name = { name: "Check-in" };
+  }
+
   if (dataSource.properties.Date && !dataSource.properties["Check-in Date"]) {
     properties.Date = { name: "Check-in Date" };
   } else if (!dataSource.properties["Check-in Date"]) {

@@ -121,7 +121,7 @@ async function main() {
       await notion.pages.create({
         parent: { data_source_id: checkinsDataSourceId },
         properties: {
-          Name: {
+          "Check-in": {
             title: [
               {
                 text: {

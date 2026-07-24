@@ -32,7 +32,7 @@ memberPageId:challengePageId:YYYY-MM-DD
 
 | 컬럼 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| `Name` | Title | 체크인 기록 제목 |
+| `Check-in` | Title | 체크인 기록 제목 |
 | `Member` | Relation | Members DB 연결 |
 | `Challenge` | Relation | Challenges DB 연결 |
 | `Checked In At` | Date | 실제 체크인 시각 |

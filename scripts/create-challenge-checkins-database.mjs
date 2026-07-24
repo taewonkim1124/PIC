@@ -65,7 +65,7 @@ async function main() {
     title: [{ text: { content: "Challenge Check-ins" } }],
     initial_data_source: {
       properties: {
-        Name: { title: {} },
+        "Check-in": { title: {} },
         Member: {
           relation: {
             data_source_id: membersDataSourceId,
