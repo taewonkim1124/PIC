@@ -12,7 +12,7 @@ const copy = {
     subtitle: "QR 발급, 챌린지 참여 확인, 결제 장부까지 관리합니다.",
     install:
       "iPhone이나 iPad에서는 Safari 공유 메뉴에서 홈 화면에 추가해서 앱처럼 사용할 수 있습니다.",
-    login: "로그인",
+    logout: "로그아웃",
     menu: [
       {
         href: "/scan",
@@ -48,7 +48,7 @@ const copy = {
     subtitle: "Manage QR issuing, challenge check-ins, and payment records.",
     install:
       "On iPhone or iPad, add this site to the Home Screen from Safari to use it like an app.",
-    login: "Log In",
+    logout: "Log Out",
     menu: [
       {
         href: "/scan",
@@ -85,6 +85,11 @@ export default function Home() {
   const { language } = useLanguage();
   const t = pick(language, copy);
 
+  async function logout() {
+    await fetch("/api/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
+
   return (
     <main style={styles.main}>
       <header>
@@ -105,9 +110,9 @@ export default function Home() {
       </section>
 
       <p style={styles.install}>{t.install}</p>
-      <Link href="/login" style={styles.loginLink}>
-        {t.login}
-      </Link>
+      <button onClick={logout} style={styles.logoutButton}>
+        {t.logout}
+      </button>
     </main>
   );
 }
@@ -151,10 +156,15 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.5,
   },
-  loginLink: {
+  logoutButton: {
     display: "inline-block",
     marginTop: 14,
+    border: 0,
+    background: "transparent",
     color: "#0369a1",
+    cursor: "pointer",
     fontWeight: 800,
+    fontSize: 15,
+    padding: 0,
   },
 };

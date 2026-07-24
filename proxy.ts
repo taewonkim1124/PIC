@@ -6,7 +6,6 @@ type AuthRole = "owner" | "super_admin" | "admin";
 const authCookieName = "pic_auth";
 
 const publicPaths = [
-  "/",
   "/login",
   "/api/login",
   "/api/logout",
@@ -21,6 +20,7 @@ const pageRules: Array<{ prefix: string; roles: AuthRole[] }> = [
   { prefix: "/scan", roles: ["admin"] },
   { prefix: "/payment", roles: ["admin"] },
   { prefix: "/checkins", roles: ["admin"] },
+  { prefix: "/", roles: ["admin"] },
 ];
 
 const apiRules: Array<{ prefix: string; roles: AuthRole[] }> = [
@@ -108,6 +108,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/admin/:path*",
     "/scan/:path*",
     "/payment/:path*",
