@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { LanguageToggle } from "@/app/components/LanguageToggle";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,12 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PIC QR 체크인",
-  description: "PIC 멤버 QR 체크인 앱",
+  title: "PIC QR Check-in",
+  description: "PIC member QR check-in app",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "PIC 체크인",
+    title: "PIC Check-in",
   },
 };
 
@@ -36,7 +37,10 @@ export default function RootLayout({
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <LanguageToggle />
+        {children}
+      </body>
     </html>
   );
 }

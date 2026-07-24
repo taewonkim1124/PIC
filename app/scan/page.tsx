@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { Html5Qrcode } from "html5-qrcode";
 
+import { pick, useLanguage } from "@/app/useLanguage";
+
 type CameraMode = "environment" | "user";
 
 type CheckinResult = {
@@ -14,12 +16,65 @@ type CheckinResult = {
   error?: string;
 };
 
-const cameraLabels: Record<CameraMode, string> = {
-  environment: "후면 카메라",
-  user: "전면 카메라",
-};
+const copy = {
+  ko: {
+    eyebrow: "PIC 체크인",
+    title: "QR 연속 체크인",
+    description:
+      "기본은 후면 카메라입니다. iPad에서 전면 카메라가 켜지면 아래 카메라 선택에서 후면 카메라로 바꿔 주세요.",
+    challengeLabel: "챌린지 이름",
+    cameraLabel: "카메라",
+    rearCamera: "후면 카메라",
+    frontCamera: "전면 카메라",
+    loadingChallenges: "챌린지 목록 불러오는 중...",
+    noChallenges: "등록된 챌린지가 없습니다",
+    start: "연속 스캔 시작",
+    stop: "연속 스캔 중지",
+    switching: "카메라 전환 중...",
+    switchCamera: "전면/후면 전환",
+    placeholder: "연속 스캔 시작 버튼을 누르면 카메라가 켜집니다.",
+    processing: "체크인 처리 중...",
+    ready: "다음 QR을 스캔할 준비가 됐습니다.",
+    failed: "체크인 실패",
+    cameraFailed: "카메라를 시작하지 못했습니다. 브라우저 권한을 확인해 주세요.",
+    switchFailed: "카메라를 전환하지 못했습니다.",
+    challengeLoadFailed: "챌린지 목록을 불러오지 못했습니다.",
+    serverFailed: "체크인 서버에 연결하지 못했습니다.",
+  },
+  en: {
+    eyebrow: "PIC Check-in",
+    title: "Continuous QR Check-in",
+    description:
+      "The rear camera is selected by default. If your iPad opens the front camera, switch it below.",
+    challengeLabel: "Challenge Name",
+    cameraLabel: "Camera",
+    rearCamera: "Rear Camera",
+    frontCamera: "Front Camera",
+    loadingChallenges: "Loading challenges...",
+    noChallenges: "No challenges found",
+    start: "Start Continuous Scan",
+    stop: "Stop Continuous Scan",
+    switching: "Switching camera...",
+    switchCamera: "Switch Front/Rear",
+    placeholder: "Press start to turn on the camera.",
+    processing: "Processing check-in...",
+    ready: "Ready to scan the next QR.",
+    failed: "Check-in Failed",
+    cameraFailed: "Could not start the camera. Please check browser permission.",
+    switchFailed: "Could not switch camera.",
+    challengeLoadFailed: "Could not load challenges.",
+    serverFailed: "Could not connect to the check-in server.",
+  },
+} as const;
 
 export default function ScanPage() {
+  const { language } = useLanguage();
+  const t = pick(language, copy);
+  const cameraLabels: Record<CameraMode, string> = {
+    environment: t.rearCamera,
+    user: t.frontCamera,
+  };
+
   const [challenges, setChallenges] = useState<string[]>([]);
   const [challengeId, setChallengeId] = useState("");
   const [loadingChallenges, setLoadingChallenges] = useState(true);
@@ -49,9 +104,7 @@ export default function ScanPage() {
         setChallengeId(names[0] ?? "");
       } catch (error) {
         setChallengeError(
-          error instanceof Error
-            ? error.message
-            : "챌린지 목록을 불러오지 못했습니다.",
+          error instanceof Error ? error.message : t.challengeLoadFailed,
         );
       } finally {
         setLoadingChallenges(false);
@@ -64,7 +117,7 @@ export default function ScanPage() {
       mountedRef.current = false;
       void stopScanner();
     };
-  }, []);
+  }, [t.challengeLoadFailed]);
 
   async function stopScanner() {
     if (cooldownTimerRef.current) {
@@ -99,7 +152,7 @@ export default function ScanPage() {
       // Some browsers may already pause the video stream internally.
     }
 
-    setResult({ message: "체크인 처리 중..." });
+    setResult({ message: t.processing });
 
     try {
       const response = await fetch("/api/checkin", {
@@ -108,9 +161,21 @@ export default function ScanPage() {
         body: JSON.stringify({ uniqueCode, challengeId }),
       });
       const data = (await response.json()) as CheckinResult;
-      setResult(data);
+      setResult({
+        ...data,
+        message:
+          data.status === "already_checked_in"
+            ? language === "ko"
+              ? `${data.participantName ?? "멤버"}님은 오늘 이미 참여했습니다.`
+              : `${data.participantName ?? "Member"} already checked in today.`
+            : data.status === "checked_in"
+              ? language === "ko"
+                ? `${data.participantName ?? "멤버"}님 체크인이 완료되었습니다.`
+                : `${data.participantName ?? "Member"} checked in successfully.`
+              : data.message,
+      });
     } catch {
-      setResult({ error: "체크인 서버에 연결하지 못했습니다." });
+      setResult({ error: t.serverFailed });
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -159,10 +224,7 @@ export default function ScanPage() {
       await stopScanner();
       setRunning(false);
       setResult({
-        error:
-          error instanceof Error
-            ? error.message
-            : "카메라를 시작하지 못했습니다. 브라우저 권한을 확인해 주세요.",
+        error: error instanceof Error ? error.message : t.cameraFailed,
       });
     }
   }
@@ -194,10 +256,7 @@ export default function ScanPage() {
     } catch (error) {
       setRunning(false);
       setResult({
-        error:
-          error instanceof Error
-            ? error.message
-            : "카메라를 전환하지 못했습니다.",
+        error: error instanceof Error ? error.message : t.switchFailed,
       });
     } finally {
       setSwitchingCamera(false);
@@ -216,24 +275,21 @@ export default function ScanPage() {
   return (
     <main style={styles.main}>
       <section style={styles.card}>
-        <p style={styles.eyebrow}>PIC 체크인</p>
-        <h1 style={styles.title}>QR 연속 체크인</h1>
-        <p style={styles.description}>
-          기본은 후면 카메라입니다. iPad에서 전면 카메라가 켜지면 아래 카메라
-          선택에서 후면 카메라로 바꿔 주세요.
-        </p>
+        <p style={styles.eyebrow}>{t.eyebrow}</p>
+        <h1 style={styles.title}>{t.title}</h1>
+        <p style={styles.description}>{t.description}</p>
 
         <label style={styles.label}>
-          챌린지 이름
+          {t.challengeLabel}
           <select
             value={challengeId}
             onChange={(event) => setChallengeId(event.target.value)}
             disabled={running || loadingChallenges}
             style={styles.input}
           >
-            {loadingChallenges && <option>챌린지 목록 불러오는 중...</option>}
+            {loadingChallenges && <option>{t.loadingChallenges}</option>}
             {!loadingChallenges && challenges.length === 0 && (
-              <option value="">등록된 챌린지가 없습니다</option>
+              <option value="">{t.noChallenges}</option>
             )}
             {challenges.map((challenge) => (
               <option key={challenge} value={challenge}>
@@ -244,7 +300,7 @@ export default function ScanPage() {
         </label>
 
         <label style={styles.label}>
-          카메라
+          {t.cameraLabel}
           <select
             value={cameraMode}
             onChange={(event) => void switchCamera(event.target.value as CameraMode)}
@@ -264,7 +320,7 @@ export default function ScanPage() {
             onClick={startContinuousScan}
             style={styles.button}
           >
-            연속 스캔 시작
+            {t.start}
           </button>
         ) : (
           <div style={styles.buttonGrid}>
@@ -273,40 +329,29 @@ export default function ScanPage() {
               disabled={switchingCamera}
               style={styles.secondaryButton}
             >
-              연속 스캔 중지
+              {t.stop}
             </button>
             <button
               onClick={() => void switchToNextCamera()}
               disabled={switchingCamera}
               style={styles.secondaryButton}
             >
-              {switchingCamera ? "카메라 전환 중..." : "전면/후면 전환"}
+              {switchingCamera ? t.switching : t.switchCamera}
             </button>
           </div>
         )}
 
         <section style={styles.scannerWrap}>
           <div id="qr-reader" style={styles.reader}>
-            {!running && (
-              <p style={styles.placeholder}>
-                연속 스캔 시작 버튼을 누르면 {cameraLabels[cameraMode]}가 켜집니다.
-              </p>
-            )}
+            {!running && <p style={styles.placeholder}>{t.placeholder}</p>}
           </div>
-          {running && (
-            <p style={styles.status}>
-              {busy
-                ? "체크인 처리 중..."
-                : `${cameraLabels[cameraMode]}로 다음 QR을 스캔할 준비가 됐습니다.`}
-            </p>
-          )}
+          {running && <p style={styles.status}>{busy ? t.processing : t.ready}</p>}
         </section>
 
         {result && (
           <section style={resultStyle}>
             <h2 style={styles.resultTitle}>
-              {result.participantName ??
-                (result.error ? "체크인 실패" : "체크인 처리 중")}
+              {result.participantName ?? (result.error ? t.failed : t.processing)}
             </h2>
             {result.date && <p style={styles.resultText}>{result.date}</p>}
             <p style={styles.resultText}>{result.message ?? result.error}</p>

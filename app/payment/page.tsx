@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { Html5Qrcode } from "html5-qrcode";
 
+import { pick, useLanguage } from "@/app/useLanguage";
+
 type ScanResult = {
   participantName?: string;
   uniqueCode?: string;
@@ -20,7 +22,56 @@ type PaymentResult = {
   error?: string;
 };
 
+const copy = {
+  ko: {
+    eyebrow: "PIC 장부",
+    title: "QR 결제 기록",
+    description:
+      "먼저 멤버 QR을 한 번 스캔한 다음, 아이템과 가격을 입력해서 Notion Payments 장부에 저장합니다.",
+    startScan: "QR 먼저 스캔하기",
+    scanning: "QR을 한 번 스캔하면 자동으로 카메라가 꺼집니다.",
+    scanned: "스캔 완료",
+    memberFound: "멤버 QR을 확인했습니다",
+    item: "아이템 *",
+    itemPlaceholder: "예: 회비, 티셔츠, 행사비",
+    price: "가격 *",
+    pricePlaceholder: "예: 20",
+    saving: "저장 중...",
+    save: "장부에 저장",
+    scanAgain: "다른 QR 다시 스캔",
+    nextPayment: "다음 결제 기록",
+    failed: "결제 기록 실패",
+    cameraFailed: "카메라를 시작하지 못했습니다. 브라우저 권한을 확인해 주세요.",
+    serverFailed: "결제 서버에 연결하지 못했습니다.",
+    paid: "결제 기록이 저장되었습니다.",
+  },
+  en: {
+    eyebrow: "PIC Ledger",
+    title: "QR Payment Record",
+    description:
+      "Scan a member QR once, then enter the item and price to save it to the Notion Payments ledger.",
+    startScan: "Scan QR First",
+    scanning: "The camera will turn off automatically after one QR scan.",
+    scanned: "Scan Complete",
+    memberFound: "Member QR confirmed",
+    item: "Item *",
+    itemPlaceholder: "e.g. Dues, T-shirt, Event fee",
+    price: "Price *",
+    pricePlaceholder: "e.g. 20",
+    saving: "Saving...",
+    save: "Save to Ledger",
+    scanAgain: "Scan Different QR",
+    nextPayment: "Next Payment",
+    failed: "Payment Save Failed",
+    cameraFailed: "Could not start the camera. Please check browser permission.",
+    serverFailed: "Could not connect to the payment server.",
+    paid: "Payment record saved.",
+  },
+} as const;
+
 export default function PaymentPage() {
+  const { language } = useLanguage();
+  const t = pick(language, copy);
   const [item, setItem] = useState("");
   const [amount, setAmount] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -82,10 +133,7 @@ export default function PaymentPage() {
       await stopScanner();
       setScanning(false);
       setPaymentResult({
-        error:
-          error instanceof Error
-            ? error.message
-            : "카메라를 시작하지 못했습니다. 브라우저 권한을 확인해 주세요.",
+        error: error instanceof Error ? error.message : t.cameraFailed,
       });
     }
   }
@@ -126,9 +174,15 @@ export default function PaymentPage() {
         uniqueCode: data.uniqueCode,
         participantName: data.participantName,
       });
-      setPaymentResult(data);
+      setPaymentResult({
+        ...data,
+        message:
+          language === "ko"
+            ? `${data.participantName ?? "멤버"}님의 ${data.item} 결제 기록이 저장되었습니다.`
+            : `${data.item} payment saved for ${data.participantName ?? "member"}.`,
+      });
     } catch {
-      setPaymentResult({ error: "결제 서버에 연결하지 못했습니다." });
+      setPaymentResult({ error: t.serverFailed });
     } finally {
       setSaving(false);
     }
@@ -140,31 +194,28 @@ export default function PaymentPage() {
   return (
     <main style={styles.main}>
       <section style={styles.card}>
-        <p style={styles.eyebrow}>PIC 장부</p>
-        <h1 style={styles.title}>QR 결제 기록</h1>
-        <p style={styles.description}>
-          먼저 멤버 QR을 한 번 스캔한 다음, 아이템과 가격을 입력해서 Notion
-          Payments 장부에 저장합니다.
-        </p>
+        <p style={styles.eyebrow}>{t.eyebrow}</p>
+        <h1 style={styles.title}>{t.title}</h1>
+        <p style={styles.description}>{t.description}</p>
 
         {!scanning && !scanResult && !paymentResult && (
           <button onClick={startScan} style={styles.button}>
-            QR 먼저 스캔하기
+            {t.startScan}
           </button>
         )}
 
         {scanning && (
           <section style={styles.scannerWrap}>
             <div id="payment-qr-reader" style={styles.reader} />
-            <p style={styles.status}>QR을 한 번 스캔하면 자동으로 카메라가 꺼집니다.</p>
+            <p style={styles.status}>{t.scanning}</p>
           </section>
         )}
 
         {scanResult?.uniqueCode && (
           <section style={styles.scannedBox}>
-            <p style={styles.smallTitle}>스캔 완료</p>
+            <p style={styles.smallTitle}>{t.scanned}</p>
             <h2 style={styles.resultTitle}>
-              {scanResult.participantName ?? "멤버 QR을 확인했습니다"}
+              {scanResult.participantName ?? t.memberFound}
             </h2>
             <p style={styles.resultText}>{scanResult.uniqueCode}</p>
           </section>
@@ -173,32 +224,32 @@ export default function PaymentPage() {
         {scanResult?.uniqueCode && paymentResult?.status !== "paid" && (
           <div style={styles.form}>
             <label style={styles.label}>
-              아이템 *
+              {t.item}
               <input
                 value={item}
                 onChange={(event) => setItem(event.target.value)}
                 style={styles.input}
-                placeholder="예: 회비, 티셔츠, 행사비"
+                placeholder={t.itemPlaceholder}
               />
             </label>
 
             <label style={styles.label}>
-              가격 *
+              {t.price}
               <input
                 inputMode="decimal"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
                 style={styles.input}
-                placeholder="예: 20"
+                placeholder={t.pricePlaceholder}
               />
             </label>
 
             <button disabled={!canSave} onClick={savePayment} style={styles.button}>
-              {saving ? "저장 중..." : "장부에 저장"}
+              {saving ? t.saving : t.save}
             </button>
 
             <button onClick={startScan} style={styles.secondaryButton}>
-              다른 QR 다시 스캔
+              {t.scanAgain}
             </button>
           </div>
         )}
@@ -206,7 +257,7 @@ export default function PaymentPage() {
         {paymentResult && (
           <section style={paymentResult.error ? styles.errorBox : styles.resultBox}>
             <h2 style={styles.resultTitle}>
-              {paymentResult.participantName ?? "결제 기록 실패"}
+              {paymentResult.participantName ?? t.failed}
             </h2>
             {paymentResult.status === "paid" ? (
               <p style={styles.resultText}>
@@ -214,10 +265,12 @@ export default function PaymentPage() {
                 {paymentResult.amount}
               </p>
             ) : null}
-            <p style={styles.resultText}>{paymentResult.message ?? paymentResult.error}</p>
+            <p style={styles.resultText}>
+              {paymentResult.message ?? paymentResult.error ?? t.paid}
+            </p>
             {paymentResult.status === "paid" && (
               <button onClick={resetForNextPayment} style={styles.button}>
-                다음 결제 기록
+                {t.nextPayment}
               </button>
             )}
           </section>

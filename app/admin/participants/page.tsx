@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import QRCode from "qrcode";
+
+import { pick, useLanguage } from "@/app/useLanguage";
 
 type Participant = {
   id: string;
@@ -11,7 +13,82 @@ type Participant = {
   unique_code: string;
 };
 
+const copy = {
+  ko: {
+    eyebrow: "PIC 관리자",
+    title: "멤버 QR 관리",
+    description:
+      "멤버 등록은 Google Form으로 받고, 이 페이지에서는 기존 멤버의 QR 조회, 발급, 재발급, 이메일 발송을 관리합니다.",
+    noticeLoadFailed: "멤버 목록을 불러올 수 없습니다.",
+    qrIssueFailed: "QR 코드를 발급할 수 없습니다.",
+    qrEmailFailed: "QR 이메일을 보낼 수 없습니다.",
+    reissueConfirm:
+      "님의 기존 QR 코드를 새 QR 코드로 재발급할까요?\n\n재발급 후에는 기존 QR을 사용할 수 없습니다. 새 QR은 이메일로 자동 발송됩니다.",
+    reissuedAndEmailed: "님의 QR 코드를 재발급하고 이메일로 보냈습니다.",
+    issued: "님의 QR 코드 발급이 완료되었습니다.",
+    bulkIssued: "명의 미발급 멤버에게 QR 코드를 발급했습니다.",
+    bulkIssuedEmail: "명의 미발급 멤버에게 QR 코드를 발급하고 이메일을 보냈습니다.",
+    emailed: "님에게 QR 이메일을 보냈습니다.",
+    sectionTitle: "기존 멤버 QR 관리",
+    sectionDescription: "이름, 이메일, 고유코드로 멤버를 검색할 수 있습니다.",
+    searchPlaceholder: "멤버 이름 검색",
+    help:
+      "QR이 없는 멤버는 새로 발급할 수 있고, 이미 QR이 있는 멤버는 재발급할 수 있습니다. 재발급한 QR은 이메일로 자동 발송됩니다.",
+    issueAll: "미발급 멤버 전체 발급",
+    issueAllEmail: "미발급 전체 발급 + 이메일",
+    refresh: "새로고침",
+    loading: "멤버 목록을 불러오는 중...",
+    noName: "이름 없음",
+    noEmail: "이메일 없음",
+    notIssued: "QR 미발급",
+    qrTitle: "QR 코드",
+    noQrYet: "아직 QR 코드가 발급되지 않았습니다.",
+    showQr: "QR 보기",
+    issueQr: "QR 발급",
+    reissueEmail: "재발급 + 이메일",
+    sendEmail: "이메일 발송",
+    noResults: "검색 결과가 없습니다.",
+  },
+  en: {
+    eyebrow: "PIC Admin",
+    title: "Member QR Management",
+    description:
+      "Member registration comes from Google Form. Use this page to view, issue, reissue, and email QR codes for existing members.",
+    noticeLoadFailed: "Could not load members.",
+    qrIssueFailed: "Could not issue QR code.",
+    qrEmailFailed: "Could not send QR email.",
+    reissueConfirm:
+      "'s existing QR code will be replaced with a new QR code.\n\nThe old QR will no longer work. The new QR will be emailed automatically.",
+    reissuedAndEmailed: "'s QR code was reissued and emailed.",
+    issued: "'s QR code was issued.",
+    bulkIssued: " members were issued QR codes.",
+    bulkIssuedEmail: " members were issued QR codes and emailed.",
+    emailed: " was sent a QR email.",
+    sectionTitle: "Existing Member QR Management",
+    sectionDescription: "Search members by name, email, or unique code.",
+    searchPlaceholder: "Search member name",
+    help:
+      "Members without QR codes can be issued new codes. Members with QR codes can be reissued, and reissued QR codes are emailed automatically.",
+    issueAll: "Issue Missing QR Codes",
+    issueAllEmail: "Issue Missing + Email",
+    refresh: "Refresh",
+    loading: "Loading members...",
+    noName: "No name",
+    noEmail: "No email",
+    notIssued: "QR not issued",
+    qrTitle: "QR Code",
+    noQrYet: "QR code has not been issued yet.",
+    showQr: "Show QR",
+    issueQr: "Issue QR",
+    reissueEmail: "Reissue + Email",
+    sendEmail: "Send Email",
+    noResults: "No search results.",
+  },
+} as const;
+
 export default function ParticipantsAdminPage() {
+  const { language } = useLanguage();
+  const t = pick(language, copy);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [search, setSearch] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
@@ -19,10 +96,6 @@ export default function ParticipantsAdminPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(true);
-
-  useEffect(() => {
-    void loadParticipants();
-  }, []);
 
   const filteredParticipants = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase();
@@ -55,7 +128,7 @@ export default function ParticipantsAdminPage() {
     setQrImage("");
   }
 
-  async function loadParticipants() {
+  const loadParticipants = useCallback(async () => {
     setListLoading(true);
     setMessage("");
 
@@ -64,28 +137,24 @@ export default function ParticipantsAdminPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "멤버 목록을 불러올 수 없습니다.");
+        throw new Error(result.error ?? t.noticeLoadFailed);
       }
 
       setParticipants(result.participants);
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "멤버 목록을 불러올 수 없습니다.",
-      );
+      setMessage(error instanceof Error ? error.message : t.noticeLoadFailed);
     } finally {
       setListLoading(false);
     }
-  }
+  }, [t.noticeLoadFailed]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadParticipants();
+  }, [loadParticipants]);
 
   async function issueQr(participant: Participant, reissue = false) {
-    if (
-      reissue &&
-      !window.confirm(
-        `${participant.name}님의 기존 QR 코드를 새 QR 코드로 재발급할까요?\n\n재발급 후에는 기존 QR을 사용할 수 없습니다. 새 QR은 이메일로 자동 발송됩니다.`,
-      )
-    ) {
+    if (reissue && !window.confirm(`${participant.name}${t.reissueConfirm}`)) {
       return;
     }
 
@@ -106,7 +175,7 @@ export default function ParticipantsAdminPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "QR 코드를 발급할 수 없습니다.");
+        throw new Error(result.error ?? t.qrIssueFailed);
       }
 
       const updatedParticipant = result.participant as Participant;
@@ -114,13 +183,11 @@ export default function ParticipantsAdminPage() {
       await showQr(updatedParticipant);
       setMessage(
         reissue
-          ? `${updatedParticipant.name}님의 QR 코드를 재발급하고 이메일로 보냈습니다.`
-          : `${updatedParticipant.name}님의 QR 코드 발급이 완료되었습니다.`,
+          ? `${updatedParticipant.name}${t.reissuedAndEmailed}`
+          : `${updatedParticipant.name}${t.issued}`,
       );
     } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "QR 코드를 발급할 수 없습니다.",
-      );
+      setMessage(error instanceof Error ? error.message : t.qrIssueFailed);
     } finally {
       setLoading(false);
     }
@@ -140,23 +207,17 @@ export default function ParticipantsAdminPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          result.error ?? "미발급 멤버 QR 코드를 발급할 수 없습니다.",
-        );
+        throw new Error(result.error ?? t.qrIssueFailed);
       }
 
       await loadParticipants();
       setMessage(
         sendEmail
-          ? `${result.count}명의 미발급 멤버에게 QR 코드를 발급하고 이메일을 보냈습니다.`
-          : `${result.count}명의 미발급 멤버에게 QR 코드를 발급했습니다.`,
+          ? `${result.count}${t.bulkIssuedEmail}`
+          : `${result.count}${t.bulkIssued}`,
       );
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "미발급 멤버 QR 코드를 발급할 수 없습니다.",
-      );
+      setMessage(error instanceof Error ? error.message : t.qrIssueFailed);
     } finally {
       setLoading(false);
     }
@@ -175,14 +236,12 @@ export default function ParticipantsAdminPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "QR 이메일을 보낼 수 없습니다.");
+        throw new Error(result.error ?? t.qrEmailFailed);
       }
 
-      setMessage(`${participant.name}님에게 QR 이메일을 보냈습니다.`);
+      setMessage(`${participant.name}${t.emailed}`);
     } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "QR 이메일을 보낼 수 없습니다.",
-      );
+      setMessage(error instanceof Error ? error.message : t.qrEmailFailed);
     } finally {
       setLoading(false);
     }
@@ -195,30 +254,22 @@ export default function ParticipantsAdminPage() {
   return (
     <main style={styles.main}>
       <section style={styles.card}>
-        <p style={styles.eyebrow}>PIC 관리자</p>
-        <h1 style={styles.title}>멤버 QR 관리</h1>
-        <p style={styles.description}>
-          멤버 등록은 Google Form으로 받고, 이 페이지에서는 기존 멤버의 QR 조회,
-          발급, 재발급, 이메일 발송만 관리합니다.
-        </p>
+        <p style={styles.eyebrow}>{t.eyebrow}</p>
+        <h1 style={styles.title}>{t.title}</h1>
+        <p style={styles.description}>{t.description}</p>
         {message && <p style={styles.notice}>{message}</p>}
       </section>
 
       <section style={styles.card}>
-        <h2 style={styles.sectionTitle}>기존 멤버 QR 관리</h2>
-        <p style={styles.muted}>
-          이름, 이메일, 고유코드로 멤버를 검색할 수 있습니다.
-        </p>
+        <h2 style={styles.sectionTitle}>{t.sectionTitle}</h2>
+        <p style={styles.muted}>{t.sectionDescription}</p>
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="멤버 이름 검색"
+          placeholder={t.searchPlaceholder}
           style={styles.searchInput}
         />
-        <p style={styles.muted}>
-          QR이 없는 멤버는 새로 발급할 수 있고, 이미 QR이 있는 멤버는 재발급할 수
-          있습니다. 재발급 시 새 QR이 이메일로 자동 발송됩니다.
-        </p>
+        <p style={styles.muted}>{t.help}</p>
 
         <div style={styles.actions}>
           <button
@@ -226,26 +277,26 @@ export default function ParticipantsAdminPage() {
             onClick={() => issueMissingQr(false)}
             style={styles.button}
           >
-            미발급 멤버 전체 발급 ({missingQrCount})
+            {t.issueAll} ({missingQrCount})
           </button>
           <button
             disabled={loading || missingQrCount === 0}
             onClick={() => issueMissingQr(true)}
             style={styles.secondaryButton}
           >
-            미발급 전체 발급 + 이메일
+            {t.issueAllEmail}
           </button>
           <button
             disabled={listLoading}
             onClick={loadParticipants}
             style={styles.secondaryButton}
           >
-            새로고침
+            {t.refresh}
           </button>
         </div>
 
         {listLoading ? (
-          <p>멤버 목록을 불러오는 중...</p>
+          <p>{t.loading}</p>
         ) : (
           <div style={styles.table}>
             {filteredParticipants.map((participant) => {
@@ -254,26 +305,26 @@ export default function ParticipantsAdminPage() {
               return (
                 <article key={participant.id} style={styles.memberRow}>
                   <div style={styles.memberInfo}>
-                    <strong>{participant.name || "이름 없음"}</strong>
-                    <p style={styles.muted}>{participant.email ?? "이메일 없음"}</p>
+                    <strong>{participant.name || t.noName}</strong>
+                    <p style={styles.muted}>{participant.email ?? t.noEmail}</p>
                     <p style={styles.code}>
-                      {participant.unique_code || "QR 미발급"}
+                      {participant.unique_code || t.notIssued}
                     </p>
 
                     {isSelected && (
                       <div style={styles.inlineQr}>
                         <h3 style={styles.inlineQrTitle}>
-                          {participant.name} QR 코드
+                          {participant.name} {t.qrTitle}
                         </h3>
                         {qrImage ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={qrImage}
-                            alt={`${participant.name}님의 QR 코드`}
+                            alt={`${participant.name} ${t.qrTitle}`}
                             width={260}
                           />
                         ) : (
-                          <p>아직 QR 코드가 발급되지 않았습니다.</p>
+                          <p>{t.noQrYet}</p>
                         )}
                       </div>
                     )}
@@ -285,7 +336,7 @@ export default function ParticipantsAdminPage() {
                       onClick={() => showQr(participant)}
                       style={styles.smallButton}
                     >
-                      QR 보기
+                      {t.showQr}
                     </button>
                     {!participant.unique_code && (
                       <button
@@ -293,7 +344,7 @@ export default function ParticipantsAdminPage() {
                         onClick={() => issueQr(participant)}
                         style={styles.smallButton}
                       >
-                        QR 발급
+                        {t.issueQr}
                       </button>
                     )}
                     {participant.unique_code && (
@@ -302,7 +353,7 @@ export default function ParticipantsAdminPage() {
                         onClick={() => issueQr(participant, true)}
                         style={styles.smallDangerButton}
                       >
-                        재발급 + 이메일
+                        {t.reissueEmail}
                       </button>
                     )}
                     <button
@@ -310,13 +361,13 @@ export default function ParticipantsAdminPage() {
                       onClick={() => emailQr(participant)}
                       style={styles.smallButton}
                     >
-                      이메일 발송
+                      {t.sendEmail}
                     </button>
                   </div>
                 </article>
               );
             })}
-            {filteredParticipants.length === 0 && <p>검색 결과가 없습니다.</p>}
+            {filteredParticipants.length === 0 && <p>{t.noResults}</p>}
           </div>
         )}
       </section>
