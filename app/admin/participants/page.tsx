@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import QRCode from "qrcode";
 
 import { pick, useLanguage } from "@/app/useLanguage";
 
@@ -10,7 +9,8 @@ type Participant = {
   id: string;
   name: string;
   email: string | null;
-  unique_code: string;
+  has_qr: boolean;
+  masked_code: string;
 };
 
 const copy = {
@@ -89,6 +89,7 @@ const copy = {
 export default function ParticipantsAdminPage() {
   const { language } = useLanguage();
   const t = pick(language, copy);
+  const noticeLoadFailed = t.noticeLoadFailed;
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [search, setSearch] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
@@ -105,7 +106,7 @@ export default function ParticipantsAdminPage() {
       const fields = [
         participant.name,
         participant.email ?? "",
-        participant.unique_code,
+        participant.masked_code,
       ];
 
       return fields.some((field) =>
@@ -116,11 +117,19 @@ export default function ParticipantsAdminPage() {
 
   async function showQr(participant: Participant) {
     setSelectedParticipantId(participant.id);
-    setQrImage(
-      participant.unique_code
-        ? await QRCode.toDataURL(participant.unique_code, { width: 320 })
-        : "",
-    );
+    setQrImage("");
+
+    if (!participant.has_qr) return;
+
+    const params = new URLSearchParams({ participantId: participant.id });
+    const response = await fetch(`/api/participants/qr-image?${params}`, {
+      cache: "no-store",
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error ?? t.qrIssueFailed);
+    }
+    setQrImage(result.qrImage);
   }
 
   function hideQr() {
@@ -128,7 +137,17 @@ export default function ParticipantsAdminPage() {
     setQrImage("");
   }
 
-  const loadParticipants = useCallback(async () => {
+  async function handleShowQr(participant: Participant) {
+    setMessage("");
+
+    try {
+      await showQr(participant);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t.qrIssueFailed);
+    }
+  }
+
+  async function loadParticipants() {
     setListLoading(true);
     setMessage("");
 
@@ -137,21 +156,22 @@ export default function ParticipantsAdminPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? t.noticeLoadFailed);
+        throw new Error(result.error ?? noticeLoadFailed);
       }
 
       setParticipants(result.participants);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t.noticeLoadFailed);
+      setMessage(error instanceof Error ? error.message : noticeLoadFailed);
     } finally {
       setListLoading(false);
     }
-  }, [t.noticeLoadFailed]);
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadParticipants();
-  }, [loadParticipants]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function issueQr(participant: Participant, reissue = false) {
     if (reissue && !window.confirm(`${participant.name}${t.reissueConfirm}`)) {
@@ -247,8 +267,8 @@ export default function ParticipantsAdminPage() {
     }
   }
 
-  const missingQrCount = participants.filter(
-    (participant) => !participant.unique_code,
+    const missingQrCount = participants.filter(
+    (participant) => !participant.has_qr,
   ).length;
 
   return (
@@ -308,7 +328,7 @@ export default function ParticipantsAdminPage() {
                     <strong>{participant.name || t.noName}</strong>
                     <p style={styles.muted}>{participant.email ?? t.noEmail}</p>
                     <p style={styles.code}>
-                      {participant.unique_code || t.notIssued}
+                      {participant.masked_code || t.notIssued}
                     </p>
 
                     {isSelected && (
@@ -332,13 +352,13 @@ export default function ParticipantsAdminPage() {
 
                   <div style={styles.rowActions}>
                     <button
-                      disabled={loading || !participant.unique_code}
-                      onClick={() => showQr(participant)}
+                      disabled={loading || !participant.has_qr}
+                      onClick={() => handleShowQr(participant)}
                       style={styles.smallButton}
                     >
                       {t.showQr}
                     </button>
-                    {!participant.unique_code && (
+                    {!participant.has_qr && (
                       <button
                         disabled={loading}
                         onClick={() => issueQr(participant)}
@@ -347,7 +367,7 @@ export default function ParticipantsAdminPage() {
                         {t.issueQr}
                       </button>
                     )}
-                    {participant.unique_code && (
+                    {participant.has_qr && (
                       <button
                         disabled={loading || !participant.email}
                         onClick={() => issueQr(participant, true)}
@@ -357,7 +377,7 @@ export default function ParticipantsAdminPage() {
                       </button>
                     )}
                     <button
-                      disabled={loading || !participant.email || !participant.unique_code}
+                      disabled={loading || !participant.email || !participant.has_qr}
                       onClick={() => emailQr(participant)}
                       style={styles.smallButton}
                     >

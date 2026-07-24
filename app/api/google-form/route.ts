@@ -4,6 +4,7 @@ import {
   updateParticipantRegistration,
 } from "@/lib/notionStore";
 import { createUniqueParticipantCode } from "@/lib/participantCodes";
+import { publicParticipant } from "@/lib/participantViews";
 import { sendQrEmail } from "@/lib/qrEmail";
 
 type GoogleFormBody = {
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
 
       return Response.json({
         status: "updated_existing_member",
-        participant,
+        participant: publicParticipant(participant),
         ...emailResult,
       });
     }
@@ -133,7 +134,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         status: "created_member",
-        participant,
+        participant: publicParticipant(participant),
         ...emailResult,
       },
       { status: 201 },

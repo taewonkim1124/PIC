@@ -22,7 +22,6 @@ function emailHtml(participant: Participant) {
     <div style="font-family: Arial, sans-serif; line-height: 1.6;">
       <h1>PIC Member QR Code</h1>
       <p>Hello ${participant.name}, please use the attached QR code when checking in.</p>
-      <p><strong>Unique Code:</strong> ${participant.unique_code}</p>
     </div>
   `;
 }

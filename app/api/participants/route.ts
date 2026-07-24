@@ -4,6 +4,7 @@ import {
   getParticipants,
 } from "@/lib/notionStore";
 import { createUniqueParticipantCode } from "@/lib/participantCodes";
+import { publicParticipant } from "@/lib/participantViews";
 import { sendQrEmail } from "@/lib/qrEmail";
 import { requireRole } from "@/lib/auth";
 
@@ -19,7 +20,7 @@ export async function GET() {
 
   try {
     const participants = await getParticipants();
-    return Response.json({ participants });
+    return Response.json({ participants: participants.map(publicParticipant) });
   } catch (error) {
     console.error("Participant lookup failed:", error);
     return Response.json(
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error: "이미 등록된 멤버입니다.",
-          participant: duplicate,
+          participant: publicParticipant(duplicate),
         },
         { status: 409 },
       );
@@ -71,7 +72,10 @@ export async function POST(request: Request) {
       await sendQrEmail(participant);
     }
 
-    return Response.json({ participant, emailSent: shouldSendEmail }, { status: 201 });
+    return Response.json(
+      { participant: publicParticipant(participant), emailSent: shouldSendEmail },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Participant creation failed:", error);
     return Response.json(

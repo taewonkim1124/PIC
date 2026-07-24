@@ -66,7 +66,6 @@ export async function POST(request: Request) {
       {
         status: "paid",
         participantName: participant.name,
-        uniqueCode,
         amount,
         item,
         message: `${participant.name}님의 결제 기록이 저장되었습니다.`,

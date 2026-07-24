@@ -15,7 +15,6 @@ type ScanResult = {
 type PaymentResult = {
   status?: "paid";
   participantName?: string;
-  uniqueCode?: string;
   amount?: number;
   item?: string;
   message?: string;
@@ -171,7 +170,7 @@ export default function PaymentPage() {
       }
 
       setScanResult({
-        uniqueCode: data.uniqueCode,
+        uniqueCode: scanResult.uniqueCode,
         participantName: data.participantName,
       });
       setPaymentResult({
@@ -217,7 +216,7 @@ export default function PaymentPage() {
             <h2 style={styles.resultTitle}>
               {scanResult.participantName ?? t.memberFound}
             </h2>
-            <p style={styles.resultText}>{scanResult.uniqueCode}</p>
+            <p style={styles.resultText}>{t.memberFound}</p>
           </section>
         )}
 
@@ -261,8 +260,7 @@ export default function PaymentPage() {
             </h2>
             {paymentResult.status === "paid" ? (
               <p style={styles.resultText}>
-                {paymentResult.uniqueCode} / {paymentResult.item} / $
-                {paymentResult.amount}
+                {paymentResult.item} / ${paymentResult.amount}
               </p>
             ) : null}
             <p style={styles.resultText}>

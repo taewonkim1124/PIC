@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import { findParticipantByCode } from "@/lib/notionStore";
 
 export function createCandidateCode() {
-  return `USER-${randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase()}`;
+  return `PIC-${randomBytes(16).toString("hex").toUpperCase()}`;
 }
 
 export async function createUniqueParticipantCode() {

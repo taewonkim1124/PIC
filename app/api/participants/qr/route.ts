@@ -4,6 +4,7 @@ import {
   updateParticipantCode,
 } from "@/lib/notionStore";
 import { createUniqueParticipantCode } from "@/lib/participantCodes";
+import { publicParticipant } from "@/lib/participantViews";
 import { sendQrEmail } from "@/lib/qrEmail";
 import { requireRole } from "@/lib/auth";
 
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     }
 
     return Response.json({
-      participant,
+      participant: publicParticipant(participant),
       emailSent: shouldSendEmail,
       reissued: Boolean(current.unique_code && shouldReissue),
     });
@@ -97,7 +98,7 @@ export async function PATCH(request: Request) {
         await sendQrEmail(issued);
       }
 
-      updated.push(issued);
+      updated.push(publicParticipant(issued));
     }
 
     return Response.json({ participants: updated, count: updated.length });
