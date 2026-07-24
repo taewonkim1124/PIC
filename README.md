@@ -320,6 +320,7 @@ Notion 관리자 DB를 사용하는 경우:
 | `Username` | Rich text |
 | `Password Hash` | Rich text |
 | `Active` | Checkbox |
+| `활동중` | Select 또는 Status |
 
 비밀번호 해시 생성:
 
@@ -327,7 +328,7 @@ Notion 관리자 DB를 사용하는 경우:
 node scripts/hash-admin-password.mjs 사용할비밀번호
 ```
 
-생성된 해시를 `Password Hash`에 넣고, `Active`를 체크하면 해당 관리자가 로그인할 수 있습니다. 이 방식을 쓰려면 Vercel 환경변수에 `NOTION_ADMINS_DATA_SOURCE_ID`를 등록해야 합니다.
+생성된 해시를 `Password Hash`에 넣고, `Active`를 체크하면 해당 관리자가 로그인할 수 있습니다. `활동중` 컬럼을 Select 또는 Status로 쓰는 경우에는 값이 `활동중`, `재직`, `현직` 중 하나일 때만 로그인할 수 있습니다. 이 방식을 쓰려면 Vercel 환경변수에 `NOTION_ADMINS_DATA_SOURCE_ID`를 등록해야 합니다.
 
 Admins DB 자동 생성:
 
