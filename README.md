@@ -293,14 +293,12 @@ GMAIL_USER=
 GMAIL_APP_PASSWORD=
 GOOGLE_FORM_SECRET=
 APP_AUTH_SECRET=
-OWNER_PASSWORD=
 SUPER_ADMIN_PASSWORD=
 ADMIN_PASSWORD=
 ```
 
 로그인 권한:
 
-- `OWNER_PASSWORD`: 시스템 소유자용입니다. 모든 페이지와 API에 접근할 수 있습니다.
 - `SUPER_ADMIN_PASSWORD`: 동아리 회장용입니다. 멤버 관리, QR 발급, 체크인, 결제 장부에 접근할 수 있습니다.
 - `ADMIN_PASSWORD`: 일반 관리자용입니다. QR 체크인, 참여명단, 결제 장부에 접근할 수 있습니다.
 
