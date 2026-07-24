@@ -32,6 +32,7 @@ const copy = {
     stop: "연속 스캔 중지",
     switching: "카메라 전환 중...",
     switchCamera: "전면/후면 전환",
+    changingChallenge: "챌린지 변경 중...",
     placeholder: "연속 스캔 시작 버튼을 누르면 카메라가 켜집니다.",
     processing: "체크인 처리 중...",
     ready: "다음 QR을 스캔할 준비가 됐습니다.",
@@ -56,6 +57,7 @@ const copy = {
     stop: "Stop Continuous Scan",
     switching: "Switching camera...",
     switchCamera: "Switch Front/Rear",
+    changingChallenge: "Changing challenge...",
     placeholder: "Press start to turn on the camera.",
     processing: "Processing check-in...",
     ready: "Ready to scan the next QR.",
@@ -85,10 +87,15 @@ export default function ScanPage() {
   const [switchingCamera, setSwitchingCamera] = useState(false);
   const [result, setResult] = useState<CheckinResult | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const challengeIdRef = useRef("");
   const cooldownRef = useRef(false);
   const cooldownTimerRef = useRef<number | null>(null);
   const busyRef = useRef(false);
   const mountedRef = useRef(true);
+
+  useEffect(() => {
+    challengeIdRef.current = challengeId;
+  }, [challengeId]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -101,7 +108,9 @@ export default function ScanPage() {
 
         const names = data.challenges as string[];
         setChallenges(names);
-        setChallengeId(names[0] ?? "");
+        const firstChallenge = names[0] ?? "";
+        challengeIdRef.current = firstChallenge;
+        setChallengeId(firstChallenge);
       } catch (error) {
         setChallengeError(
           error instanceof Error ? error.message : t.challengeLoadFailed,
@@ -142,6 +151,9 @@ export default function ScanPage() {
   async function submitCheckin(uniqueCode: string) {
     if (!uniqueCode || cooldownRef.current || busyRef.current) return;
 
+    const activeChallengeId = challengeIdRef.current;
+    if (!activeChallengeId) return;
+
     cooldownRef.current = true;
     busyRef.current = true;
     setBusy(true);
@@ -158,7 +170,7 @@ export default function ScanPage() {
       const response = await fetch("/api/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uniqueCode, challengeId }),
+        body: JSON.stringify({ uniqueCode, challengeId: activeChallengeId }),
       });
       const data = (await response.json()) as CheckinResult;
       setResult({
@@ -267,6 +279,33 @@ export default function ScanPage() {
     await switchCamera(cameraMode === "environment" ? "user" : "environment");
   }
 
+  async function changeChallenge(nextChallengeId: string) {
+    challengeIdRef.current = nextChallengeId;
+    setChallengeId(nextChallengeId);
+    setResult(null);
+
+    if (!running || switchingCamera) return;
+
+    setSwitchingCamera(true);
+    setBusy(false);
+    busyRef.current = false;
+    cooldownRef.current = false;
+
+    try {
+      await stopScanner();
+      if (mountedRef.current && nextChallengeId) {
+        await startScanner(cameraMode);
+      }
+    } catch (error) {
+      setRunning(false);
+      setResult({
+        error: error instanceof Error ? error.message : t.cameraFailed,
+      });
+    } finally {
+      setSwitchingCamera(false);
+    }
+  }
+
   const resultStyle =
     result?.error || result?.status === "already_checked_in"
       ? styles.warningResult
@@ -283,8 +322,8 @@ export default function ScanPage() {
           {t.challengeLabel}
           <select
             value={challengeId}
-            onChange={(event) => setChallengeId(event.target.value)}
-            disabled={running || loadingChallenges}
+            onChange={(event) => void changeChallenge(event.target.value)}
+            disabled={loadingChallenges || switchingCamera}
             style={styles.input}
           >
             {loadingChallenges && <option>{t.loadingChallenges}</option>}
@@ -342,10 +381,13 @@ export default function ScanPage() {
         )}
 
         <section style={styles.scannerWrap}>
-          <div id="qr-reader" style={styles.reader}>
-            {!running && <p style={styles.placeholder}>{t.placeholder}</p>}
-          </div>
-          {running && <p style={styles.status}>{busy ? t.processing : t.ready}</p>}
+          <div id="qr-reader" style={styles.reader} />
+          {!running && <p style={styles.placeholder}>{t.placeholder}</p>}
+          {running && (
+            <p style={styles.status}>
+              {switchingCamera ? t.changingChallenge : busy ? t.processing : t.ready}
+            </p>
+          )}
         </section>
 
         {result && (
