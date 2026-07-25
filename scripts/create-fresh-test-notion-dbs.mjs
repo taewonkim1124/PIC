@@ -124,19 +124,36 @@ async function main() {
   loadEnv();
 
   const notion = new Client({ auth: requireEnv("NOTION_TOKEN") });
-  const parentDatabase = await notion.databases.retrieve({
-    database_id: requireEnv("NOTION_CHECKINS_DATABASE_ID"),
-  });
+  const explicitParentPageId = process.env.NOTION_TEST_PARENT_PAGE_ID;
+  const explicitMembersParentPageId = process.env.NOTION_TEST_MEMBERS_PARENT_PAGE_ID;
+  const explicitChallengesParentPageId =
+    process.env.NOTION_TEST_CHALLENGES_PARENT_PAGE_ID;
+  let parentPageId = explicitParentPageId;
 
-  if (parentDatabase.parent.type !== "page_id") {
-    throw new Error("Existing challenge database parent is not a Notion page.");
+  if (!parentPageId) {
+    const parentDatabase = await notion.databases.retrieve({
+      database_id: requireEnv("NOTION_CHECKINS_DATABASE_ID"),
+    });
+
+    if (parentDatabase.parent.type !== "page_id") {
+      throw new Error("Existing challenge database parent is not a Notion page.");
+    }
+
+    parentPageId = parentDatabase.parent.page_id;
   }
 
   const suffix = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
-  const parent = { type: "page_id", page_id: parentDatabase.parent.page_id };
+  const membersParent = {
+    type: "page_id",
+    page_id: explicitMembersParentPageId ?? parentPageId,
+  };
+  const challengesParent = {
+    type: "page_id",
+    page_id: explicitChallengesParentPageId ?? parentPageId,
+  };
 
   const membersDatabase = await notion.databases.create({
-    parent,
+    parent: membersParent,
     title: [{ text: { content: `PIC Test Members ${suffix}` } }],
     initial_data_source: {
       properties: {
@@ -160,7 +177,7 @@ async function main() {
   const membersDataSourceId = dataSourceId(membersDatabase);
 
   const challengesDatabase = await notion.databases.create({
-    parent,
+    parent: challengesParent,
     title: [{ text: { content: `PIC Test Challenges ${suffix}` } }],
     initial_data_source: {
       properties: {
@@ -172,7 +189,7 @@ async function main() {
   const challengesDataSourceId = dataSourceId(challengesDatabase);
 
   const checkinsDatabase = await notion.databases.create({
-    parent,
+    parent: challengesParent,
     title: [{ text: { content: `PIC Test Challenge Check-ins ${suffix}` } }],
     initial_data_source: {
       properties: {
