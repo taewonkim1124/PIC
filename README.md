@@ -1,3 +1,201 @@
+# PIC QR Check-in System
+
+PIC QR Check-in is a Notion-backed club management app for member QR codes, challenge check-ins, participant lists, and simple payment records.
+
+Production URL:
+
+```text
+https://pic-beta-blue.vercel.app
+```
+
+## Overview
+
+The app is built with Next.js App Router and TypeScript. Notion is used as the main data store through the Notion API.
+
+Main workflows:
+
+1. Members are registered from the admin page or through Google Form automation.
+2. Each member receives a unique QR code.
+3. Admins scan member QR codes for challenge check-ins.
+4. Each check-in is saved as one row in the `Challenge Check-ins` database.
+5. Duplicate check-ins are blocked by `Check-in Key`.
+6. Challenge pages show participant count and participant list through Notion Rollups.
+7. Payment records can be added by scanning a member QR code first, then entering item and price.
+
+## Pages
+
+| Path | Purpose |
+| --- | --- |
+| `/` | Home dashboard |
+| `/login` | Admin login |
+| `/admin/participants` | Member QR management |
+| `/scan` | QR challenge check-in scanner |
+| `/checkins` | Today's challenge participant list |
+| `/payment` | Payment ledger scanner |
+| `/account/password` | Admin password change |
+
+## Notion Databases
+
+### Members
+
+Stores member profile information and unique QR code values.
+
+Required properties:
+
+| Property | Type |
+| --- | --- |
+| `이름` | Title |
+| `직책` | Select |
+| `팀` | Select |
+| `메모` | Rich text |
+| `젠더` | Select |
+| `이메일` | Email |
+| `카카오톡` | Rich text |
+| `번호` | Phone |
+| `인스타` | Rich text |
+| `입사일` | Date |
+| `학년` | Select |
+| `활동중` | Checkbox |
+| `유니크 코드` | Rich text |
+| `Participation Count` | Number |
+
+### Challenges
+
+Stores challenge pages.
+
+Required properties:
+
+| Property | Type |
+| --- | --- |
+| `Challenge Name` | Title |
+| `Date` | Date |
+| `Check-ins` | Relation to Challenge Check-ins |
+| `Participant Count` | Rollup |
+| `Participants` | Rollup |
+
+Rollup settings:
+
+| Property | Setting |
+| --- | --- |
+| `Participant Count` | Relation: `Check-ins`, Property: `Member`, Calculate: `Count unique values` |
+| `Participants` | Relation: `Check-ins`, Property: `Member`, Calculate: `Show unique values` |
+
+### Challenge Check-ins
+
+Stores one row per member check-in.
+
+Required properties:
+
+| Property | Type |
+| --- | --- |
+| `Check-in` | Title |
+| `Member` | Relation to Members |
+| `Challenge` | Relation to Challenges |
+| `Checked In At` | Date |
+| `Check-in Date` | Date |
+| `Method` | Select: `QR`, `Manual` |
+| `Recorded By` | Rich text |
+| `Status` | Select: `Valid`, `Cancelled` |
+| `Check-in Key` | Rich text |
+
+The `Challenge Check-ins.Challenge` relation and the `Challenges.Check-ins` relation must be the same bidirectional Notion relation pair.
+
+### Payments
+
+Stores payment ledger rows.
+
+Required properties:
+
+| Property | Type |
+| --- | --- |
+| `Name` | Title |
+| `Code` | Rich text |
+| `Item` | Rich text |
+| `Price` | Rich text |
+| `Recorded By` | Rich text |
+| `Recorded At` | Date |
+
+## Setup
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run locally:
+
+```bash
+npm run dev
+```
+
+Run checks:
+
+```bash
+npm run lint
+npx tsc --noEmit --incremental false
+npm test
+npm run build
+```
+
+## Environment Variables
+
+Required in `.env.local` and in Vercel production:
+
+```env
+NOTION_TOKEN=
+NOTION_MEMBERS_DATABASE_ID=
+NOTION_MEMBERS_DATA_SOURCE_ID=
+NOTION_CHECKINS_DATABASE_ID=
+NOTION_CHECKINS_DATA_SOURCE_ID=
+NOTION_CHALLENGE_CHECKINS_DATABASE_ID=
+NOTION_CHALLENGE_CHECKINS_DATA_SOURCE_ID=
+NOTION_PAYMENTS_DATABASE_ID=
+NOTION_PAYMENTS_DATA_SOURCE_ID=
+NOTION_ADMINS_DATABASE_ID=
+NOTION_ADMINS_DATA_SOURCE_ID=
+GMAIL_USER=
+GMAIL_APP_PASSWORD=
+GOOGLE_FORM_SECRET=
+APP_AUTH_SECRET=
+ADMIN_USERS=
+ADMIN_USERNAME=
+ADMIN_DISPLAY_NAME=
+ADMIN_PASSWORD=
+```
+
+Do not commit `.env.local`, Notion tokens, Gmail app passwords, or database IDs to GitHub.
+
+## Fresh Test Database Setup
+
+To create a fresh validated test structure under a Notion page:
+
+```bash
+NOTION_TEST_PARENT_PAGE_ID=your_notion_page_id node scripts/create-fresh-test-notion-dbs.mjs
+```
+
+The script creates:
+
+- test Members database
+- test Challenges database
+- test Challenge Check-ins database
+- one test member
+- one test challenge
+- one test check-in
+
+It also verifies:
+
+- bidirectional `Challenge` ↔ `Check-ins` relation
+- `Participant Count` Rollup
+- `Participants` Rollup
+- reciprocal relation update
+- Rollup update
+- duplicate check-in prevention
+
+The script updates local `.env.local` to point to the newly created test databases. Vercel environment variables must be updated separately for production.
+
+## Korean Guide
+
 # PIC QR 체크인 사용설명서
 
 PIC 동아리 멤버 등록, QR 발급, 챌린지 체크인, 결제 장부 기록을 관리하는 웹앱입니다.
