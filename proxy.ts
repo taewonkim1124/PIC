@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-type AuthRole = "owner" | "admin";
-type AuthSession = {
-  role: AuthRole;
-  username: string;
-  displayName: string;
-};
-
-const authCookieName = "pic_auth";
+import { authCookieName, verifyAuthToken } from "@/lib/authToken";
+import type { AuthRole } from "@/lib/authToken";
 
 const publicPaths = [
   "/login",
@@ -44,61 +38,6 @@ function isPublicPath(pathname: string) {
   );
 }
 
-function hex(buffer: ArrayBuffer) {
-  return [...new Uint8Array(buffer)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function decodeBase64Url(value: string) {
-  const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
-  return atob(padded);
-}
-
-async function signPayload(payload: string) {
-  const secret = process.env.APP_AUTH_SECRET || process.env.ADMIN_PASSWORD;
-  if (!secret) return "";
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  return hex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload)));
-}
-
-async function verifySession(token: string | undefined): Promise<AuthSession | null> {
-  if (!token) return null;
-
-  const [payload, signature] = token.split(".");
-  if (!payload || !signature) return null;
-
-  const expected = await signPayload(payload);
-  if (!expected || signature !== expected) return null;
-
-  try {
-    const decoded = JSON.parse(decodeBase64Url(payload)) as Partial<AuthSession>;
-    if (
-      (decoded.role !== "owner" && decoded.role !== "admin") ||
-      !decoded.username ||
-      !decoded.displayName
-    ) {
-      return null;
-    }
-
-    return {
-      role: decoded.role,
-      username: decoded.username,
-      displayName: decoded.displayName,
-    };
-  } catch {
-    return null;
-  }
-}
-
 function allowedRolesFor(pathname: string) {
   const rules = pathname.startsWith("/api/") ? apiRules : pageRules;
   return rules.find((rule) => pathname.startsWith(rule.prefix))?.roles ?? null;
@@ -120,7 +59,7 @@ export async function proxy(request: NextRequest) {
   const allowedRoles = allowedRolesFor(pathname);
   if (!allowedRoles) return NextResponse.next();
 
-  const session = await verifySession(request.cookies.get(authCookieName)?.value);
+  const session = await verifyAuthToken(request.cookies.get(authCookieName)?.value);
   if (canAccess(session?.role ?? null, allowedRoles)) {
     return NextResponse.next();
   }

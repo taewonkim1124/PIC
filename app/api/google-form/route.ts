@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+
 import {
   createParticipant,
   findParticipantDuplicate,
@@ -31,12 +33,22 @@ function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function safeCompare(a: string, b: string) {
+  const aBuffer = Buffer.from(a);
+  const bBuffer = Buffer.from(b);
+  return aBuffer.length === bBuffer.length && timingSafeEqual(aBuffer, bBuffer);
+}
+
 function authorized(request: Request, body: GoogleFormBody) {
   const expected = process.env.GOOGLE_FORM_SECRET;
   if (!expected) return false;
 
   const headerSecret = request.headers.get("x-google-form-secret");
-  return headerSecret === expected || body.secret === expected;
+  const bodySecret = typeof body.secret === "string" ? body.secret : "";
+  return (
+    (headerSecret !== null && safeCompare(headerSecret, expected)) ||
+    (bodySecret !== "" && safeCompare(bodySecret, expected))
+  );
 }
 
 async function trySendQrEmail(participant: {

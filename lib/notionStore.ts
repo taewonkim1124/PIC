@@ -221,8 +221,17 @@ function participantFromPage(page: PageObjectResponse) {
   };
 }
 
-export async function getParticipants() {
-  const participants = [];
+type Participant = ReturnType<typeof participantFromPage>;
+
+const PARTICIPANTS_CACHE_TTL_MS = 30_000;
+let participantsCache: { data: Participant[]; expiresAt: number } | null = null;
+
+function invalidateParticipantsCache() {
+  participantsCache = null;
+}
+
+async function fetchAllParticipants() {
+  const participants: Participant[] = [];
   let cursor: string | undefined;
 
   do {
@@ -240,6 +249,20 @@ export async function getParticipants() {
     cursor = response.next_cursor ?? undefined;
   } while (cursor);
 
+  return participants;
+}
+
+// Duplicate checks (registration, Google Form sync) re-scan the full member
+// list on every call. A short TTL cache keeps repeated calls during a
+// registration burst from re-fetching the entire, ever-growing list from
+// Notion each time; it's invalidated on any write below.
+export async function getParticipants() {
+  if (participantsCache && participantsCache.expiresAt > Date.now()) {
+    return participantsCache.data;
+  }
+
+  const participants = await fetchAllParticipants();
+  participantsCache = { data: participants, expiresAt: Date.now() + PARTICIPANTS_CACHE_TTL_MS };
   return participants;
 }
 
@@ -277,6 +300,7 @@ export async function updateParticipantCode(
     }),
   );
 
+  invalidateParticipantsCache();
   return participantFromPage(page);
 }
 
@@ -291,6 +315,7 @@ export async function createParticipant(input: ParticipantRegistrationInput) {
     properties: registrationProperties(input),
   });
 
+  invalidateParticipantsCache();
   return {
     id: page.id,
     name: input.name,
@@ -310,6 +335,7 @@ export async function updateParticipantRegistration(
     }),
   );
 
+  invalidateParticipantsCache();
   return participantFromPage(page);
 }
 
@@ -470,7 +496,11 @@ export async function createCheckin(input: {
     },
   });
 
-  await updateMemberParticipationCount(input.participantId);
+  const nextCount =
+    typeof input.currentParticipationCount === "number"
+      ? input.currentParticipationCount + 1
+      : undefined;
+  await updateMemberParticipationCount(input.participantId, nextCount);
 
   return { alreadyCheckedIn: false };
 }

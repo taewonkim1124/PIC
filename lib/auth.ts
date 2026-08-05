@@ -3,14 +3,16 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
-export type AuthRole = "owner" | "admin";
-export type AuthSession = {
-  role: AuthRole;
-  username: string;
-  displayName: string;
-};
+import {
+  authCookieName,
+  authSecret,
+  createAuthToken,
+  verifyAuthToken,
+} from "@/lib/authToken";
+import type { AuthRole, AuthSession } from "@/lib/authToken";
 
-export const authCookieName = "pic_auth";
+export { authCookieName, createAuthToken, verifyAuthToken };
+export type { AuthRole, AuthSession };
 
 const rolePasswords: Record<AuthRole, string> = {
   owner: "OWNER_PASSWORD",
@@ -28,70 +30,10 @@ type AdminUser = {
   name: string;
 };
 
-function authSecret() {
-  const secret = process.env.APP_AUTH_SECRET || process.env.ADMIN_PASSWORD;
-  if (!secret) {
-    throw new Error("APP_AUTH_SECRET or ADMIN_PASSWORD is not configured.");
-  }
-  return secret;
-}
-
-function isRole(value: string): value is AuthRole {
-  return value === "owner" || value === "admin";
-}
-
-function signPayload(payload: string) {
-  return createHmac("sha256", authSecret()).update(payload).digest("hex");
-}
-
-function encodePayload(session: AuthSession) {
-  return Buffer.from(JSON.stringify(session)).toString("base64url");
-}
-
-function decodePayload(payload: string): AuthSession | null {
-  try {
-    const session = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
-    ) as Partial<AuthSession>;
-
-    if (
-      !session.role ||
-      !isRole(session.role) ||
-      !session.username ||
-      !session.displayName
-    ) {
-      return null;
-    }
-
-    return {
-      role: session.role,
-      username: session.username,
-      displayName: session.displayName,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function createAuthToken(session: AuthSession) {
-  const payload = encodePayload(session);
-  return `${payload}.${signPayload(payload)}`;
-}
-
-export function verifyAuthToken(token: string | undefined): AuthSession | null {
-  if (!token) return null;
-
-  const [payload, signature] = token.split(".");
-  if (!signature) return null;
-
-  const expected = signPayload(payload);
-  const expectedBuffer = Buffer.from(expected);
-  const actualBuffer = Buffer.from(signature);
-  if (expectedBuffer.length !== actualBuffer.length) return null;
-
-  return timingSafeEqual(expectedBuffer, actualBuffer)
-    ? decodePayload(payload)
-    : null;
+function safeCompare(a: string, b: string) {
+  const aBuffer = Buffer.from(a);
+  const bBuffer = Buffer.from(b);
+  return aBuffer.length === bBuffer.length && timingSafeEqual(aBuffer, bBuffer);
 }
 
 export async function currentSession() {
@@ -125,7 +67,7 @@ export function passwordHash(password: string) {
 export function validLogin(role: AuthRole, password: string) {
   const envName = rolePasswords[role];
   const expected = process.env[envName];
-  return Boolean(expected && password && expected === password);
+  return Boolean(expected && password && safeCompare(expected, password));
 }
 
 function normalizeUsername(username: string) {
@@ -193,7 +135,7 @@ export function findLoginSession(username: string, password: string) {
   const adminUser = parseAdminUsers().find(
     (user) => normalizeUsername(user.username) === normalized,
   );
-  if (adminUser && adminUser.password === password) {
+  if (adminUser && safeCompare(adminUser.password, password)) {
     return {
       role: "admin",
       username: normalizeUsername(adminUser.username),
