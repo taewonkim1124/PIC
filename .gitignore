@@ -42,3 +42,6 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# personal Claude Code subagents (not shared with the team)
+/.claude/agents/
